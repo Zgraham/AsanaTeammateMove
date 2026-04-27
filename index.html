@@ -247,6 +247,22 @@
   #export-btn:hover { background: #e0e0e0; }
   #export-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
 
+  #export-mov-btn {
+    padding: 13px;
+    background: transparent;
+    border: 1.5px solid #444;
+    border-radius: 10px;
+    color: #ccc;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.01em;
+  }
+  #export-mov-btn:hover { border-color: #888; color: #fff; }
+  #export-mov-btn:disabled { border-color: #2a2a2a; color: #555; cursor: not-allowed; }
+
   .revolve-axis-btns {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -532,16 +548,16 @@
   <div class="control-group anim-speed">
     <label>Animation Speed</label>
     <div class="range-row">
-      <input type="range" id="speed-range" min="1" max="20" step="1" value="4">
-      <span class="range-val" id="speed-val">4</span>
+      <input type="range" id="speed-range" min="1" max="20" step="1" value="12">
+      <span class="range-val" id="speed-val">12</span>
     </div>
   </div>
 
   <div class="control-group concentric-only">
     <label>Thickness</label>
     <div class="range-row">
-      <input type="range" id="spacing-range" min="5" max="28" step="1" value="14">
-      <span class="range-val" id="spacing-val">14</span>
+      <input type="range" id="spacing-range" min="5" max="28" step="1" value="12">
+      <span class="range-val" id="spacing-val">12</span>
     </div>
   </div>
 
@@ -568,7 +584,10 @@
   <hr class="divider">
 
   <div style="display:flex;flex-direction:column;gap:8px;">
-    <button id="export-btn">Export GIF</button>
+    <div style="display:flex;gap:8px;">
+      <button id="export-btn" style="flex:1;">Export GIF</button>
+      <button id="export-mov-btn" style="flex:1;">Export MOV</button>
+    </div>
     <div class="progress-bar-wrap" id="progress-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
     <div id="export-progress"></div>
   </div>
@@ -638,10 +657,10 @@ const state = {
   eyes: 1,
   theme: 0,
   ratio: '1:1',
-  speed: 4,
+  speed: 12,
   animStyle: 'fluid',
   animType: 'concentric',
-  concentricSpacing: 14,
+  concentricSpacing: 12,
   avatarCount: 12,
   avatarSize: 'medium',
   bdBgColor: '#ffffff',
@@ -1678,6 +1697,7 @@ function bindEvents() {
   });
 
   document.getElementById('export-btn').addEventListener('click', exportGIF);
+  document.getElementById('export-mov-btn').addEventListener('click', exportMOV);
 
   // Collapsible sections
   document.querySelectorAll('.collapsible .collapsible-header').forEach(btn => {
@@ -1686,6 +1706,187 @@ function bindEvents() {
     });
   });
 
+}
+
+// ─── MOV EXPORT ───────────────────────────────────────────────────────────────
+
+let mp4MuxerReady = false;
+function ensureMp4Muxer() {
+  return new Promise((resolve, reject) => {
+    if (mp4MuxerReady) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.js';
+    s.onload = () => { mp4MuxerReady = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function exportMOV() {
+  const btn = document.getElementById('export-mov-btn');
+  const gifBtn = document.getElementById('export-btn');
+  const progressEl = document.getElementById('export-progress');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressFill = document.getElementById('progress-fill');
+
+  if (typeof VideoEncoder === 'undefined') {
+    progressEl.textContent = 'MOV export requires Chrome 94+, Edge 94+, or Safari 16.4+.';
+    progressWrap.style.display = 'none';
+    return;
+  }
+
+  btn.disabled = true;
+  gifBtn.disabled = true;
+  btn.textContent = 'Preparing…';
+  progressEl.textContent = 'Loading encoder…';
+  progressWrap.style.display = 'block';
+  progressFill.style.width = '0%';
+
+  try { await ensureMp4Muxer(); } catch(e) {
+    btn.disabled = false; gifBtn.disabled = false;
+    btn.textContent = 'Export MOV';
+    progressEl.textContent = 'Failed to load mp4-muxer. Check connection.';
+    return;
+  }
+
+  const [w, h] = SIZES[state.ratio];
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const offCtx = off.getContext('2d');
+
+  const fps = 30;
+  let totalFrames, getFrame;
+
+  if (state.animType === 'balldrop') {
+    const spawnInt   = Math.max(0.25, 3.5 / state.avatarCount);
+    const duration   = Math.min(state.avatarCount * spawnInt + 2.5, 9);
+    totalFrames      = Math.min(Math.round(duration * fps), 270);
+    const r          = w * BALL_SIZES[state.avatarSize];
+    const simDt      = 1 / fps;
+    let simBalls     = [], simSpawned = 0;
+    const simConfigs = buildBallConfigs(state.avatarCount, seededRng(42));
+    getFrame = (f) => {
+      const simTime = f * simDt;
+      while (simSpawned < state.avatarCount && simTime >= simSpawned * spawnInt) {
+        const rng = seededRng(simSpawned * 999 + 1);
+        simBalls.push(makeBall(w, r, rng, simConfigs[simSpawned]));
+        simSpawned++;
+      }
+      stepBalls(simBalls, simDt, w, h);
+      if (state.bdBgColor === 'transparent') offCtx.clearRect(0,0,w,h);
+      else { offCtx.fillStyle = state.bdBgColor; offCtx.fillRect(0,0,w,h); }
+      for (const b of simBalls) drawAvatar(offCtx, b);
+    };
+  } else if (state.animType === 'ambient') {
+    const dur = 6;
+    totalFrames = Math.min(Math.round(dur * fps), 180);
+    const simDt = 1 / fps;
+    const rng   = seededRng(12345);
+    const es    = state.ambientEyeRange / 5;
+    const r     = Math.min(w, h) * 0.3;
+    let simLookX = ambientLookX, simLookY = ambientLookY;
+    let simTargetX = ambientTargetX, simTargetY = ambientTargetY;
+    let simBlinking = ambientBlinking, simBlinkT = ambientBlinkT;
+    let simNextEvent = 0.3 + rng() * 0.5, simElapsed = 0;
+    getFrame = (_f) => {
+      simElapsed += simDt;
+      const lerpSpd = 2 + state.ambientEyeRange * 0.7;
+      simLookX += (simTargetX - simLookX) * lerpSpd * simDt;
+      simLookY += (simTargetY - simLookY) * lerpSpd * simDt;
+      let blinkScale = 1;
+      if (simBlinking) {
+        simBlinkT += simDt * 9;
+        if (simBlinkT >= 1) { simBlinkT = 0; simBlinking = false; }
+        blinkScale = Math.abs(1 - 2 * simBlinkT);
+      }
+      if (simElapsed > simNextEvent) {
+        const roll = rng();
+        if (roll < 0.25) { simBlinking = true; simBlinkT = 0; simNextEvent = simElapsed + (0.5 + rng() * 2) / es; }
+        else if (roll < 0.65) { simTargetX = (rng()-0.5)*3*es; simTargetY = (rng()-0.5)*1.5*es; simNextEvent = simElapsed + (0.6 + rng()*1.5)/es; }
+        else { simTargetX = 0; simTargetY = 0; simNextEvent = simElapsed + (1 + rng()*1.5)/es; }
+      }
+      if (state.ambientBgColor === 'transparent') offCtx.clearRect(0,0,w,h);
+      else { offCtx.fillStyle = state.ambientBgColor; offCtx.fillRect(0,0,w,h); }
+      drawAmbientAvatar(offCtx, w/2, h/2, r, state.shape, state.eyes, state.ambientColor, simLookX, simLookY, blinkScale);
+    };
+  } else if (state.animType === 'revolve') {
+    const rps = state.speed * 0.1;
+    const dur = 1 / rps;
+    totalFrames = Math.min(Math.round(dur * fps), 180);
+    getFrame = (f) => drawRevolveFrame(offCtx, w, h, f / fps);
+  } else {
+    const speedRings = state.speed * 0.15;
+    const loopSecs   = 2 / speedRings;
+    totalFrames      = Math.min(120, Math.max(30, Math.round(loopSecs * fps)));
+    getFrame = (f) => drawFrame(offCtx, w, h, (f / totalFrames) * 2);
+  }
+
+  // Align dimensions to even numbers (H.264 requirement)
+  const encW = w % 2 === 0 ? w : w - 1;
+  const encH = h % 2 === 0 ? h : h - 1;
+
+  const { Muxer, ArrayBufferTarget } = Mp4Muxer;
+  const muxer = new Muxer({
+    target: new ArrayBufferTarget(),
+    video: { codec: 'avc', width: encW, height: encH },
+    fastStart: 'in-memory'
+  });
+
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: e => console.error('VideoEncoder error:', e)
+  });
+
+  const codecConfig = { codec: 'avc1.42001f', width: encW, height: encH, bitrate: 8_000_000, framerate: fps };
+  const support = await VideoEncoder.isConfigSupported(codecConfig);
+  if (!support.supported) {
+    btn.disabled = false; gifBtn.disabled = false;
+    btn.textContent = 'Export MOV';
+    progressEl.textContent = 'H.264 encoding not supported in this browser.';
+    return;
+  }
+  encoder.configure(codecConfig);
+
+  progressEl.textContent = 'Encoding frames…';
+
+  for (let f = 0; f < totalFrames; f++) {
+    getFrame(f);
+    const timestamp = Math.round(f * (1_000_000 / fps));
+    const vf = new VideoFrame(off, { timestamp });
+    encoder.encode(vf, { keyFrame: f % 30 === 0 });
+    vf.close();
+    progressFill.style.width = ((f / totalFrames) * 85) + '%';
+    progressEl.textContent = `Encoding… ${f + 1}/${totalFrames}`;
+    if (f % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  progressEl.textContent = 'Finalizing…';
+  progressFill.style.width = '90%';
+  await encoder.flush();
+  muxer.finalize();
+
+  const buffer = muxer.target.buffer;
+  const blob = new Blob([buffer], { type: 'video/mp4' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ratio = state.ratio.replace(':','x');
+  const typeSuffix = state.animType === 'concentric'
+    ? `concentric_${THEMES[state.theme].name.toLowerCase()}`
+    : state.animType === 'balldrop'
+    ? `balldrop_${state.avatarCount}avatars`
+    : state.animType === 'revolve'
+    ? `revolve_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`
+    : `ambient_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`;
+  a.download = `teammate_${ratio}_${typeSuffix}.mov`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  btn.disabled = false; gifBtn.disabled = false;
+  btn.textContent = 'Export MOV';
+  progressEl.textContent = 'Done!';
+  progressFill.style.width = '100%';
+  setTimeout(() => { progressEl.textContent = ''; progressWrap.style.display = 'none'; }, 3000);
 }
 
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
