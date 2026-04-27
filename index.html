@@ -265,7 +265,7 @@
 
   .revolve-axis-btns {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 6px;
   }
   .axis-btn {
@@ -461,6 +461,13 @@
     </button>
     <div class="collapsible-body">
       <div class="visual-grid" id="shape-grid"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+        <label>Stroke Weight</label>
+        <div class="range-row">
+          <input type="range" id="stroke-weight-range" min="1" max="10" step="1" value="5">
+          <span class="range-val" id="stroke-weight-val">5</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -508,7 +515,7 @@
   <div class="control-group balldrop-only">
     <label>Avatar Count</label>
     <div class="range-row">
-      <input type="range" id="count-range" min="3" max="30" step="1" value="12">
+      <input type="range" id="count-range" min="3" max="50" step="1" value="12">
       <span class="range-val" id="count-val">12</span>
     </div>
   </div>
@@ -566,8 +573,6 @@
     <div class="revolve-axis-btns" id="revolve-axis-btns">
       <button class="axis-btn active" data-axis="horizontal" title="Horizontal">↔</button>
       <button class="axis-btn"        data-axis="vertical"   title="Vertical">↕</button>
-      <button class="axis-btn"        data-axis="diagonal1"  title="Diagonal ↗">↗</button>
-      <button class="axis-btn"        data-axis="diagonal2"  title="Diagonal ↘">↘</button>
     </div>
   </div>
 
@@ -654,6 +659,7 @@ const THEMES = [
 
 const state = {
   shape: 5,
+  strokeWeight: 5,
   eyes: 1,
   theme: 0,
   ratio: '1:1',
@@ -790,7 +796,7 @@ function drawFrame(target, w, h, totalPhase) {
   target.fillStyle = '#ffffff';
   target.fill(sp);
   target.strokeStyle = '#000000';
-  target.lineWidth = 1.5;
+  target.lineWidth = 1.5 * (state.strokeWeight / 5);
   target.stroke(sp);
   const [cex, cey] = SHAPE_EYE_OFFSETS[state.shape] ?? [7, 9.5];
   target.translate(cex, cey);
@@ -960,7 +966,7 @@ function drawAvatar(t, b) {
   t.translate(-12, -12);
   const sp = new Path2D(SHAPES[shape]);
   t.fillStyle = '#fff'; t.fill(sp);
-  t.strokeStyle = '#000'; t.lineWidth = 1.5; t.stroke(sp);
+  t.strokeStyle = '#000'; t.lineWidth = 1.5 * (state.strokeWeight / 5); t.stroke(sp);
   const [ex, ey] = SHAPE_EYE_OFFSETS[shape] ?? [7, 9.5];
   t.translate(ex, ey);
   t.fillStyle = '#000';
@@ -1018,7 +1024,7 @@ function drawAmbientAvatar(t, cx, cy, r, shape, eyes, color, lookX, lookY, blink
   t.translate(-12, -12);
   const sp = new Path2D(SHAPES[shape]);
   t.fillStyle = '#fff'; t.fill(sp);
-  t.strokeStyle = '#000'; t.lineWidth = 1.5; t.stroke(sp);
+  t.strokeStyle = '#000'; t.lineWidth = 1.5 * (state.strokeWeight / 5); t.stroke(sp);
   const [ex, ey] = SHAPE_EYE_OFFSETS[shape] ?? [7, 9.5];
   t.translate(ex + lookX, ey + lookY);
   t.save();
@@ -1117,7 +1123,7 @@ function drawRevolveFrame(target, w, h, elapsed) {
   const cx = w / 2, cy = h / 2;
   const R       = Math.min(w, h) * 0.38;
   const thick   = R * 0.14;
-  const strokeW = R * 0.022;
+  const strokeW = R * 0.022 * (state.strokeWeight / 5);
 
   const rps  = state.speed * 0.1;
   const a    = elapsed * rps * Math.PI * 2;
@@ -1357,14 +1363,12 @@ async function exportGIF() {
     totalFrames = Math.min(Math.round(dur * fps), 150);
     frameDelay  = Math.round(1000 / fps);
     const simDt = 1 / fps;
-    const rng   = seededRng(12345);
-    const es    = state.ambientEyeRange / 5;
+    const es    = Math.max(state.ambientEyeRange / 5, 0.01);
     const r     = Math.min(w, h) * 0.3;
-    // seed from current live state so GIF matches what the user sees
     let simLookX = ambientLookX, simLookY = ambientLookY;
     let simTargetX = ambientTargetX, simTargetY = ambientTargetY;
     let simBlinking = ambientBlinking, simBlinkT = ambientBlinkT;
-    let simNextEvent = 0.3 + rng() * 0.5, simElapsed = 0;
+    let simNextEvent = 0.3 + Math.random() * 0.5, simElapsed = 0;
     getFrame = (_f) => {
       simElapsed += simDt;
       const lerpSpd = 2 + state.ambientEyeRange * 0.7;
@@ -1377,17 +1381,17 @@ async function exportGIF() {
         blinkScale = Math.abs(1 - 2 * simBlinkT);
       }
       if (simElapsed > simNextEvent) {
-        const roll = rng();
+        const roll = Math.random();
         if (roll < 0.25) {
           simBlinking = true; simBlinkT = 0;
-          simNextEvent = simElapsed + (0.5 + rng() * 2) / es;
+          simNextEvent = simElapsed + (0.5 + Math.random() * 2) / es;
         } else if (roll < 0.65) {
-          simTargetX = (rng() - 0.5) * 3 * es;
-          simTargetY = (rng() - 0.5) * 1.5 * es;
-          simNextEvent = simElapsed + (0.6 + rng() * 1.5) / es;
+          simTargetX = (Math.random() - 0.5) * 3 * es;
+          simTargetY = (Math.random() - 0.5) * 1.5 * es;
+          simNextEvent = simElapsed + (0.6 + Math.random() * 1.5) / es;
         } else {
           simTargetX = 0; simTargetY = 0;
-          simNextEvent = simElapsed + (1 + rng() * 1.5) / es;
+          simNextEvent = simElapsed + (1 + Math.random() * 1.5) / es;
         }
       }
       if (state.ambientBgColor === 'transparent') { offCtx.clearRect(0, 0, w, h); } else { offCtx.fillStyle = state.ambientBgColor; offCtx.fillRect(0, 0, w, h); }
@@ -1522,8 +1526,14 @@ function bindEvents() {
     state.theme = +e.target.value;
   });
 
+  const typeSpeedDefaults = { concentric: 12, revolve: 4 };
   document.getElementById('type-select').addEventListener('change', e => {
     state.animType = e.target.value;
+    if (typeSpeedDefaults[state.animType] !== undefined) {
+      state.speed = typeSpeedDefaults[state.animType];
+      document.getElementById('speed-range').value = state.speed;
+      document.getElementById('speed-val').textContent = state.speed;
+    }
     updateControlVisibility();
     startAnim();
   });
@@ -1696,6 +1706,11 @@ function bindEvents() {
     document.getElementById('spacing-val').textContent = e.target.value;
   });
 
+  document.getElementById('stroke-weight-range').addEventListener('input', e => {
+    state.strokeWeight = +e.target.value;
+    document.getElementById('stroke-weight-val').textContent = e.target.value;
+  });
+
   document.getElementById('export-btn').addEventListener('click', exportGIF);
   document.getElementById('export-mov-btn').addEventListener('click', exportMOV);
 
@@ -1781,13 +1796,12 @@ async function exportMOV() {
     const dur = 6;
     totalFrames = Math.min(Math.round(dur * fps), 180);
     const simDt = 1 / fps;
-    const rng   = seededRng(12345);
-    const es    = state.ambientEyeRange / 5;
+    const es    = Math.max(state.ambientEyeRange / 5, 0.01);
     const r     = Math.min(w, h) * 0.3;
     let simLookX = ambientLookX, simLookY = ambientLookY;
     let simTargetX = ambientTargetX, simTargetY = ambientTargetY;
     let simBlinking = ambientBlinking, simBlinkT = ambientBlinkT;
-    let simNextEvent = 0.3 + rng() * 0.5, simElapsed = 0;
+    let simNextEvent = 0.3 + Math.random() * 0.5, simElapsed = 0;
     getFrame = (_f) => {
       simElapsed += simDt;
       const lerpSpd = 2 + state.ambientEyeRange * 0.7;
@@ -1800,10 +1814,10 @@ async function exportMOV() {
         blinkScale = Math.abs(1 - 2 * simBlinkT);
       }
       if (simElapsed > simNextEvent) {
-        const roll = rng();
-        if (roll < 0.25) { simBlinking = true; simBlinkT = 0; simNextEvent = simElapsed + (0.5 + rng() * 2) / es; }
-        else if (roll < 0.65) { simTargetX = (rng()-0.5)*3*es; simTargetY = (rng()-0.5)*1.5*es; simNextEvent = simElapsed + (0.6 + rng()*1.5)/es; }
-        else { simTargetX = 0; simTargetY = 0; simNextEvent = simElapsed + (1 + rng()*1.5)/es; }
+        const roll = Math.random();
+        if (roll < 0.25) { simBlinking = true; simBlinkT = 0; simNextEvent = simElapsed + (0.5 + Math.random() * 2) / es; }
+        else if (roll < 0.65) { simTargetX = (Math.random()-0.5)*3*es; simTargetY = (Math.random()-0.5)*1.5*es; simNextEvent = simElapsed + (0.6 + Math.random()*1.5)/es; }
+        else { simTargetX = 0; simTargetY = 0; simNextEvent = simElapsed + (1 + Math.random()*1.5)/es; }
       }
       if (state.ambientBgColor === 'transparent') offCtx.clearRect(0,0,w,h);
       else { offCtx.fillStyle = state.ambientBgColor; offCtx.fillRect(0,0,w,h); }
