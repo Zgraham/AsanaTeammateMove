@@ -434,6 +434,7 @@
         <option value="balldrop">Ball Drop</option>
         <option value="ambient">Ambient</option>
         <option value="revolve">3D Revolve</option>
+        <option value="wheatpaste">Wheat Paste</option>
       </select>
     </div>
     <div class="style-toggle concentric-only" id="style-toggle-bar">
@@ -454,7 +455,7 @@
     </svg>
   </div>
 
-  <div class="control-group not-balldrop collapsible">
+  <div id="body-shape-group" class="control-group not-balldrop collapsible">
     <button class="collapsible-header">
       Body Shape
       <span class="collapsible-chevron"><svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1l4 4 4-4" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -471,7 +472,7 @@
     </div>
   </div>
 
-  <div class="control-group not-balldrop collapsible">
+  <div id="eyes-group" class="control-group not-balldrop collapsible">
     <button class="collapsible-header">
       Eyes
       <span class="collapsible-chevron"><svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1l4 4 4-4" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -586,6 +587,32 @@
     <div class="color-palette" id="revolve-bg-palette"></div>
   </div>
 
+  <div class="control-group wheatpaste-only">
+    <label>Background</label>
+    <div class="color-palette" id="wp-bg-palette"></div>
+  </div>
+
+  <div class="control-group wheatpaste-only">
+    <label>Size</label>
+    <div class="ratio-group">
+      <button class="wp-size-btn ratio-btn" data-wpsize="small">S</button>
+      <button class="wp-size-btn ratio-btn active" data-wpsize="medium">M</button>
+      <button class="wp-size-btn ratio-btn" data-wpsize="large">L</button>
+    </div>
+  </div>
+
+  <div class="control-group wheatpaste-only">
+    <label>Avatar Count</label>
+    <div class="range-row">
+      <input type="range" id="wp-count-range" min="3" max="24" step="1" value="8">
+      <span class="range-val" id="wp-count-val">8</span>
+    </div>
+  </div>
+
+  <div class="control-group wheatpaste-only">
+    <button id="wp-regen-btn" style="width:100%;padding:10px;background:#252525;border:1.5px solid #444;border-radius:10px;color:#ccc;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;transition:all 0.15s;letter-spacing:0.01em;">↻  Regenerate</button>
+  </div>
+
   <hr class="divider">
 
   <div style="display:flex;flex-direction:column;gap:8px;">
@@ -677,6 +704,10 @@ const state = {
   revolveDiscColor: '#79ABFF',
   revolveBgColor: '#111111',
   revolveAxis: 'horizontal',
+  wpBgColor: '#F7BD51',
+  wpSize: 'medium',
+  wpCount: 8,
+  wpSeed: Math.floor(Math.random() * 1e9),
 };
 
 let animId = null;
@@ -833,21 +864,38 @@ function startAnim() {
   ambientPrevT = 0; ambientLookX = 0; ambientLookY = 0;
   ambientTargetX = 0; ambientTargetY = 0;
   ambientBlinking = false; ambientBlinkT = 0; ambientNextEvent = 1.2;
-  const fn = state.animType === 'balldrop' ? loopBallDrop
-           : state.animType === 'ambient'  ? loopAmbient
-           : state.animType === 'revolve'  ? loopRevolve
+  wpStamps = []; wpStampIdx = 0; wpPrevT = 0;
+  if (state.animType === 'wheatpaste') {
+    const [ww, wh] = SIZES[state.ratio];
+    ctx.clearRect(0, 0, ww, wh); // clear immediately so old frames don't show
+    const stampSize = Math.min(ww, wh) * WP_SIZES[state.wpSize];
+    wpConfigs = buildWpConfigs(state.wpSeed, ww, wh, stampSize, state.wpCount);
+  }
+  const fn = state.animType === 'balldrop'   ? loopBallDrop
+           : state.animType === 'ambient'    ? loopAmbient
+           : state.animType === 'revolve'    ? loopRevolve
+           : state.animType === 'wheatpaste' ? loopWheatPaste
            : loop;
   animId = requestAnimationFrame(fn);
 }
 
 function updateControlVisibility() {
   const t = state.animType;
-  document.querySelectorAll('.concentric-only').forEach(el => el.style.display = t === 'concentric' ? '' : 'none');
-  document.querySelectorAll('.balldrop-only').forEach(el =>   el.style.display = t === 'balldrop'   ? '' : 'none');
-  document.querySelectorAll('.ambient-only').forEach(el =>    el.style.display = t === 'ambient'    ? '' : 'none');
-  document.querySelectorAll('.revolve-only').forEach(el =>    el.style.display = t === 'revolve'    ? '' : 'none');
-  document.querySelectorAll('.not-balldrop').forEach(el =>    el.style.display = t !== 'balldrop'   ? '' : 'none');
-  document.querySelectorAll('.anim-speed').forEach(el =>      el.style.display = (t === 'concentric' || t === 'revolve') ? '' : 'none');
+  document.querySelectorAll('.concentric-only').forEach(el =>  el.style.display = t === 'concentric'  ? '' : 'none');
+  document.querySelectorAll('.balldrop-only').forEach(el =>    el.style.display = t === 'balldrop'    ? '' : 'none');
+  document.querySelectorAll('.ambient-only').forEach(el =>     el.style.display = t === 'ambient'     ? '' : 'none');
+  document.querySelectorAll('.revolve-only').forEach(el =>     el.style.display = t === 'revolve'     ? '' : 'none');
+  document.querySelectorAll('.wheatpaste-only').forEach(el =>  el.style.display = t === 'wheatpaste'  ? '' : 'none');
+  document.querySelectorAll('.not-balldrop').forEach(el =>     el.style.display = t !== 'balldrop'    ? '' : 'none');
+  // Body shape + Eyes hidden for balldrop and wheatpaste (WP uses random shapes/eyes per stamp)
+  const bodyShapeGroup = document.getElementById('body-shape-group');
+  const eyesGroup      = document.getElementById('eyes-group');
+  const wpHide = t === 'balldrop' || t === 'wheatpaste';
+  if (bodyShapeGroup) bodyShapeGroup.style.display = wpHide ? 'none' : '';
+  if (eyesGroup)      eyesGroup.style.display      = wpHide ? 'none' : '';
+  document.querySelectorAll('.anim-speed').forEach(el =>
+    el.style.display = (t === 'concentric' || t === 'revolve' || t === 'wheatpaste') ? '' : 'none'
+  );
 }
 
 // ─── BALL DROP ───────────────────────────────────────────────────────────────
@@ -1250,6 +1298,110 @@ function loopRevolve(ts) {
   animId = requestAnimationFrame(loopRevolve);
 }
 
+// ─── WHEAT PASTE ─────────────────────────────────────────────────────────────
+
+const WP_STAMP_DUR = 0.18;
+const WP_SIZES = { small: 0.22, medium: 0.30, large: 0.40 };
+
+let wpStamps   = [];
+let wpConfigs  = [];
+let wpStampIdx = 0;
+let wpPrevT    = 0;
+
+// Pre-generate all stamp positions/shapes with a seeded RNG so the composition
+// is fixed until Regenerate is pressed. Uses candidate-based min-distance placement
+// to ensure stamps spread across the canvas rather than clustering.
+function buildWpConfigs(seed, w, h, stampSize, count) {
+  const rng    = seededRng(seed);
+  const CANDS  = 12; // candidates per stamp for min-distance placement
+  const minD2  = (stampSize * 0.5) ** 2; // min center-to-center distance squared
+  const margin = stampSize * 0.1;        // allow slight bleed off edges
+  const placed = [];
+
+  for (let i = 0; i < count; i++) {
+    // Generate CANDS candidate positions (fixed # of RNG calls → deterministic)
+    const candidates = [];
+    for (let k = 0; k < CANDS; k++) {
+      candidates.push({
+        x: margin + rng() * (w - 2 * margin),
+        y: margin + rng() * (h - 2 * margin),
+      });
+    }
+    // Pick the first candidate that's far enough from already-placed stamps
+    let chosen = candidates[CANDS - 1]; // fallback to last
+    for (const c of candidates) {
+      if (placed.every(p => (c.x-p.x)**2 + (c.y-p.y)**2 >= minD2)) {
+        chosen = c; break;
+      }
+    }
+    placed.push(chosen);
+
+    const cfg = {
+      x:          chosen.x,
+      y:          chosen.y,
+      size:       stampSize,
+      shape:      Math.ceil(rng() * 16),
+      eyes:       Math.ceil(rng() * 12),
+      rotation:   (rng() - 0.5) * Math.PI / 5.5,
+      peelCorner: Math.floor(rng() * 4),  // 0=TL, 1=TR, 2=BR, 3=BL
+    };
+    placed[placed.length - 1] = cfg; // update with full config for distance checks
+  }
+  return placed;
+}
+
+// Draws a single stamp: slams from 1.4→1.0 with a hard cubic ease over WP_STAMP_DUR.
+function drawWpStampFrame(target, stamp) {
+  const t        = Math.min(stamp.stampT / WP_STAMP_DUR, 1);
+  const progress = 1 - Math.pow(1 - t, 3); // ease-out cubic — fast decel
+  const sc       = 1.4 - 0.4 * progress;   // 1.4 → 1.0
+
+  target.save();
+  target.globalAlpha = Math.min(t / 0.18, 1); // snap opaque in first ~18% of duration
+  target.translate(stamp.x, stamp.y);
+  target.scale(sc, sc);
+  target.rotate(stamp.rotation);
+  const s = stamp.size / 24;
+  target.scale(s, s);
+  target.translate(-12, -12);
+  const shapeP = new Path2D(SHAPES[stamp.shape]);
+  target.fillStyle = '#ffffff';
+  target.fill(shapeP);
+  target.strokeStyle = '#000';
+  target.lineWidth = 1.5 * (state.strokeWeight / 5);
+  target.stroke(shapeP);
+  const [ex, ey] = SHAPE_EYE_OFFSETS[stamp.shape] ?? [7, 9.5];
+  target.translate(ex, ey);
+  target.fillStyle = '#000';
+  for (const p of EYES[stamp.eyes]) target.fill(new Path2D(p));
+  target.restore();
+}
+
+function loopWheatPaste(ts) {
+  if (!startTime) { startTime = ts; wpPrevT = 0; }
+  const elapsed = (ts - startTime) / 1000;
+  const dt      = Math.min(elapsed - wpPrevT, 0.05);
+  wpPrevT = elapsed;
+
+  const [w, h]        = SIZES[state.ratio];
+  const spawnInterval = Math.max(0.08, 0.7 / state.speed);
+
+  // Spawn next stamp from pre-built configs
+  if (wpStampIdx < wpConfigs.length && elapsed >= wpStampIdx * spawnInterval) {
+    wpStamps.push({ ...wpConfigs[wpStampIdx], stampT: 0 });
+    wpStampIdx++;
+  }
+
+  // Advance stamp timers
+  for (const stamp of wpStamps) stamp.stampT += dt;
+
+  // Render — holds at end, no auto-reset (use Regenerate button)
+  if (state.wpBgColor === 'transparent') { ctx.clearRect(0, 0, w, h); } else { ctx.fillStyle = state.wpBgColor; ctx.fillRect(0, 0, w, h); }
+  for (const stamp of wpStamps) drawWpStampFrame(ctx, stamp);
+
+  animId = requestAnimationFrame(loopWheatPaste);
+}
+
 // ─── GIF EXPORT ──────────────────────────────────────────────────────────────
 
 // ─── GIF EXPORT ──────────────────────────────────────────────────────────────
@@ -1291,9 +1443,10 @@ async function exportGIF() {
   progressEl.textContent = 'Capturing frames…';
 
   const TRANSP_KEY = 0xFF00FF; // magenta — doesn't appear in any avatar/theme color
-  const bgIsTransparent = (state.animType === 'ambient'  && state.ambientBgColor  === 'transparent') ||
-                          (state.animType === 'balldrop' && state.bdBgColor       === 'transparent') ||
-                          (state.animType === 'revolve'  && state.revolveBgColor  === 'transparent');
+  const bgIsTransparent = (state.animType === 'ambient'     && state.ambientBgColor === 'transparent') ||
+                          (state.animType === 'balldrop'    && state.bdBgColor      === 'transparent') ||
+                          (state.animType === 'revolve'     && state.revolveBgColor === 'transparent') ||
+                          (state.animType === 'wheatpaste'  && state.wpBgColor      === 'transparent');
 
   let totalFrames, frameDelay, getFrame;
 
@@ -1370,6 +1523,27 @@ async function exportGIF() {
       const elapsed = f / fps;
       drawRevolveFrame(offCtx, w, h, elapsed);
     };
+  } else if (state.animType === 'wheatpaste') {
+    const fps        = 25;
+    const spawnInt   = Math.max(0.08, 0.7 / state.speed);
+    const dur        = state.wpCount * spawnInt + 0.5;
+    totalFrames      = Math.min(Math.round(dur * fps), 220);
+    frameDelay       = Math.round(1000 / fps);
+    const simDt      = 1 / fps;
+    const stampSize  = Math.min(w, h) * WP_SIZES[state.wpSize];
+    const simConfigs = buildWpConfigs(state.wpSeed, w, h, stampSize, state.wpCount);
+    const simStamps  = [];
+    let   simElapsed = 0, simStampIdx = 0;
+    getFrame = (_f) => {
+      simElapsed += simDt;
+      if (simStampIdx < simConfigs.length && simElapsed >= simStampIdx * spawnInt) {
+        simStamps.push({ ...simConfigs[simStampIdx], stampT: 0 });
+        simStampIdx++;
+      }
+      for (const s of simStamps) s.stampT += simDt;
+      if (state.wpBgColor === 'transparent') { offCtx.clearRect(0, 0, w, h); } else { offCtx.fillStyle = state.wpBgColor; offCtx.fillRect(0, 0, w, h); }
+      for (const s of simStamps) drawWpStampFrame(offCtx, s);
+    };
   } else {
     const speedRings  = state.speed * 0.15;
     const loopSecs    = 2 / speedRings;
@@ -1421,6 +1595,8 @@ async function exportGIF() {
       ? `balldrop_${state.avatarCount}avatars`
       : state.animType === 'revolve'
       ? `revolve_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`
+      : state.animType === 'wheatpaste'
+      ? `wheatpaste_${state.wpCount}stamps`
       : `ambient_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`;
     a.download = `teammate_${ratio}_${typeSuffix}.gif`;
     a.click();
@@ -1489,7 +1665,7 @@ function bindEvents() {
     state.theme = +e.target.value;
   });
 
-  const typeSpeedDefaults = { concentric: 12, revolve: 4 };
+  const typeSpeedDefaults = { concentric: 12, revolve: 4, wheatpaste: 6 };
   document.getElementById('type-select').addEventListener('change', e => {
     state.animType = e.target.value;
     if (typeSpeedDefaults[state.animType] !== undefined) {
@@ -1684,6 +1860,42 @@ function bindEvents() {
     });
   });
 
+  // Wheat Paste controls
+  const wpBgPalette = document.getElementById('wp-bg-palette');
+  [...AVATAR_COLORS, ...BG_SWATCHES].forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === 'transparent' ? ' transparent-swatch' : '') + (color === state.wpBgColor ? ' active' : '');
+    if (color !== 'transparent') sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.wpBgColor = color;
+      wpBgPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    wpBgPalette.appendChild(sw);
+  });
+
+  document.querySelectorAll('.wp-size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.wp-size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.wpSize = btn.dataset.wpsize;
+      if (state.animType === 'wheatpaste') startAnim();
+    });
+  });
+
+  document.getElementById('wp-count-range').addEventListener('input', e => {
+    state.wpCount = +e.target.value;
+    document.getElementById('wp-count-val').textContent = e.target.value;
+  });
+  document.getElementById('wp-count-range').addEventListener('change', () => {
+    if (state.animType === 'wheatpaste') startAnim();
+  });
+
+  document.getElementById('wp-regen-btn').addEventListener('click', () => {
+    state.wpSeed = Math.floor(Math.random() * 1e9);
+    if (state.animType === 'wheatpaste') startAnim();
+  });
+
 }
 
 // ─── MOV EXPORT ───────────────────────────────────────────────────────────────
@@ -1791,6 +2003,25 @@ async function exportMOV() {
     const dur = 1 / rps;
     totalFrames = Math.min(Math.round(dur * fps), 180);
     getFrame = (f) => drawRevolveFrame(offCtx, w, h, f / fps);
+  } else if (state.animType === 'wheatpaste') {
+    const spawnInt   = Math.max(0.08, 0.7 / state.speed);
+    const dur        = state.wpCount * spawnInt + 0.5;
+    totalFrames      = Math.min(Math.round(dur * fps), 270);
+    const simDt      = 1 / fps;
+    const stampSize  = Math.min(w, h) * WP_SIZES[state.wpSize];
+    const simConfigs = buildWpConfigs(state.wpSeed, w, h, stampSize, state.wpCount);
+    const simStamps  = [];
+    let   simElapsed = 0, simStampIdx = 0;
+    getFrame = (_f) => {
+      simElapsed += simDt;
+      if (simStampIdx < simConfigs.length && simElapsed >= simStampIdx * spawnInt) {
+        simStamps.push({ ...simConfigs[simStampIdx], stampT: 0 });
+        simStampIdx++;
+      }
+      for (const s of simStamps) s.stampT += simDt;
+      if (state.wpBgColor === 'transparent') { offCtx.clearRect(0, 0, w, h); } else { offCtx.fillStyle = state.wpBgColor; offCtx.fillRect(0, 0, w, h); }
+      for (const s of simStamps) drawWpStampFrame(offCtx, s);
+    };
   } else {
     const speedRings = state.speed * 0.15;
     const loopSecs   = 2 / speedRings;
@@ -1854,6 +2085,8 @@ async function exportMOV() {
     ? `balldrop_${state.avatarCount}avatars`
     : state.animType === 'revolve'
     ? `revolve_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`
+    : state.animType === 'wheatpaste'
+    ? `wheatpaste_${state.wpCount}stamps`
     : `ambient_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`;
   a.download = `teammate_${ratio}_${typeSuffix}.mov`;
   a.click();
