@@ -1171,22 +1171,9 @@ function drawRevolveFrame(target, w, h, elapsed) {
   // perpendicular direction — keeping the character upright for every axis choice.
   const alpha = theta - Math.PI / 2;
 
-  // Gradient extent in character-local space, sweeping along the foreshortening direction.
-  const gMag  = 13.5 * cosA;
-  const gPerp = 8.6;
-  // Start / end of the face lighting gradient:
-  const fg0x = 12 - gMag * fdX + gPerp * fpX;
-  const fg0y = 12 - gMag * fdY + gPerp * fpY;
-  const fg1x = 12 + gMag * fdX - gPerp * fpX;
-  const fg1y = 12 + gMag * fdY - gPerp * fpY;
-  // Back-face gradient (uses absC instead of cosA so it's always lit):
-  const bg0x = 12 - 10.8 * absC * fdX + gPerp * fpX;
-  const bg0y = 12 - 10.8 * absC * fdY + gPerp * fpY;
-  const bg1x = 12 + 10.8 * absC * fdX - gPerp * fpX;
-  const bg1y = 12 + 10.8 * absC * fdY - gPerp * fpY;
-  // Rim gradient (upper-right → lower-left in local space, fixed):
-  const rim0x = 12 + 12 * fpX;   const rim0y = 12 - 12 * fpY;
-  const rim1x = 12 - 12 * fpX;   const rim1y = 12 + 12 * fpY;
+  // Flat shading colors — back face and rim are slightly darkened versions of base
+  const rimColor  = tonalShift(base, -20);
+  const backColor = tonalShift(base, -35);
 
   // withFaceAt: translate to face canvas position, apply directional foreshortening via
   // rotate-scale-rotate so the character shape stays upright for any spin axis.
@@ -1206,11 +1193,7 @@ function drawRevolveFrame(target, w, h, elapsed) {
   const sp = new Path2D(SHAPES[state.shape]);
 
   const drawFaceB = (fX, fY) => withFaceAt(fX, fY, () => {
-    const bg = target.createLinearGradient(bg0x, bg0y, bg1x, bg1y);
-    bg.addColorStop(0,   tonalShift(base, -50));
-    bg.addColorStop(0.5, tonalShift(base, -32));
-    bg.addColorStop(1,   tonalShift(base, -18));
-    target.fillStyle = bg;
+    target.fillStyle = backColor;
     target.fill(sp);
     target.strokeStyle = '#000';
     target.lineWidth   = charSW;
@@ -1218,21 +1201,8 @@ function drawRevolveFrame(target, w, h, elapsed) {
   });
 
   const drawFaceA = (fX, fY) => withFaceAt(fX, fY, () => {
-    target.fillStyle = '#fff';
+    target.fillStyle = base;
     target.fill(sp);
-    target.save();
-    target.clip(sp);
-    const fg = target.createLinearGradient(fg0x, fg0y, fg1x, fg1y);
-    fg.addColorStop(0,   '#000');
-    fg.addColorStop(0.5, '#808080');
-    fg.addColorStop(1,   '#fff');
-    target.globalCompositeOperation = 'soft-light';
-    target.globalAlpha = 0.45;
-    target.fillStyle = fg;
-    target.fillRect(0, 0, 24, 24);
-    target.globalCompositeOperation = 'source-over';
-    target.globalAlpha = 1;
-    target.restore();
     target.strokeStyle = '#000';
     target.lineWidth   = charSW;
     target.stroke(sp);
@@ -1242,9 +1212,6 @@ function drawRevolveFrame(target, w, h, elapsed) {
     for (const p of EYES[state.eyes]) target.fill(new Path2D(p));
   });
 
-  const rimLight = tonalShift(base, -18);
-  const rimMid   = tonalShift(base, -32);
-  const rimDark  = tonalShift(base, -50);
   const extSteps = 20;
   const outlineW = charSW * 2;
 
@@ -1255,11 +1222,7 @@ function drawRevolveFrame(target, w, h, elapsed) {
   });
 
   const fillLayer = (fX, fY) => withFaceAt(fX, fY, () => {
-    const g = target.createLinearGradient(rim0x, rim0y, rim1x, rim1y);
-    g.addColorStop(0,   rimLight);
-    g.addColorStop(0.5, rimMid);
-    g.addColorStop(1,   rimDark);
-    target.fillStyle = g;
+    target.fillStyle = rimColor;
     target.fill(sp);
   });
 
