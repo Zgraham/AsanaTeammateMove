@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Teammate Motion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; background: #111; color: #fff; height: 100vh; display: flex; overflow: hidden; }
+
+  #preview-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #111;
+    padding: 20px 24px 24px;
+    overflow: hidden;
+    gap: 16px;
+  }
+
+  #anim-type-bar {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  #anim-type-bar .select-wrap {
+    width: 200px;
+  }
+  #anim-type-bar .style-toggle {
+    width: 200px;
+  }
+
+  #preview-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
+  }
+
+  #preview {
+    border-radius: 16px;
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  #sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: #1a1a1a;
+    border-left: 1px solid #2a2a2a;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px 16px 24px;
+    gap: 20px;
+  }
+
+  .sidebar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: -8px;
+  }
+
+  .control-group { display: flex; flex-direction: column; gap: 10px; }
+
+  label { font-size: 14px; color: #aaa; font-weight: 500; }
+
+  select, input[type=range] {
+    width: 100%;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    padding: 8px 10px;
+    appearance: none;
+    cursor: pointer;
+    outline: none;
+  }
+  select:hover, select:focus { border-color: #555; }
+
+  input[type=range] {
+    padding: 0;
+    height: 4px;
+    background: #333;
+    border: none;
+    border-radius: 2px;
+    accent-color: #5bc478;
+  }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-val { font-size: 14px; color: #888; min-width: 28px; text-align: right; }
+
+  .ratio-group { display: flex; gap: 6px; }
+  .ratio-btn {
+    flex: 1;
+    padding: 8px 0;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #aaa;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .ratio-btn.active { background: #5bc478; border-color: #5bc478; color: #000; }
+  .ratio-btn:hover:not(.active) { border-color: #555; color: #fff; }
+
+  .label-row { display: flex; align-items: center; justify-content: space-between; }
+  .pencil-btn {
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    line-height: 1; border-radius: 4px; display: flex; align-items: center;
+    transition: opacity 0.15s;
+  }
+  .pencil-btn svg { display: block; }
+  .pencil-btn svg path { fill: #aaa; transition: fill 0.15s; }
+  .pencil-btn:hover svg path { fill: #fff; }
+  .pencil-btn.active svg path { fill: #5bc478; }
+
+  .custom-size-row {
+    display: none; align-items: center; gap: 6px; margin-top: 4px;
+  }
+  .custom-size-row.visible { display: flex; }
+  .custom-size-row input[type=number] {
+    width: 0; flex: 1; background: #252525; border: 1px solid #333;
+    border-radius: 8px; color: #fff; font-size: 13px;
+    font-family: 'Inter', sans-serif; padding: 7px 8px;
+    outline: none; -moz-appearance: textfield;
+  }
+  .custom-size-row input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .custom-size-row input[type=number]:focus { border-color: #555; }
+  .custom-size-sep { color: #555; font-size: 13px; flex-shrink: 0; }
+  .custom-size-apply {
+    flex-shrink: 0; background: #333; border: 1px solid #444; border-radius: 8px;
+    color: #ccc; font-size: 13px; padding: 7px 10px; cursor: pointer;
+    font-family: 'Inter', sans-serif; transition: all 0.15s;
+  }
+  .custom-size-apply:hover { background: #5bc478; border-color: #5bc478; color: #000; }
+
+  .style-toggle {
+    display: flex;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .style-btn {
+    flex: 1;
+    padding: 7px 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #666;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .style-btn.active { background: #2e2e2e; color: #fff; }
+  .style-btn:hover:not(.active) { color: #aaa; }
+
+  #type-select {
+    width: 100%;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    padding: 9px 10px;
+    appearance: none;
+    cursor: pointer;
+    outline: none;
+  }
+
+  input[type=color] {
+    width: 100%;
+    height: 36px;
+    padding: 2px 4px;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    cursor: pointer;
+    outline: none;
+  }
+  input[type=color]:hover { border-color: #555; }
+  #type-select:hover { border-color: #555; }
+
+  .type-btn {
+    width: 100%;
+    padding: 9px 12px;
+    background: #5bc478;
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .divider { border: none; border-top: 1px solid #2a2a2a; margin: 0; }
+
+  #export-btn {
+    width: 100%;
+    padding: 13px;
+    background: #fff;
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: auto;
+    letter-spacing: 0.01em;
+  }
+  #export-btn:hover { background: #e0e0e0; }
+  #export-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+  .revolve-axis-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .axis-btn {
+    background: #1e1e1e;
+    border: 1.5px solid #333;
+    border-radius: 8px;
+    color: #aaa;
+    font-size: 17px;
+    line-height: 1;
+    padding: 7px 0;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+  }
+  .axis-btn:hover { background: #2a2a2a; color: #fff; border-color: #555; }
+  .axis-btn.active { background: #fff; color: #000; border-color: #fff; }
+
+  #export-progress {
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  .progress-bar-wrap { background: #252525; border-radius: 4px; height: 4px; overflow: hidden; display: none; }
+  .progress-bar-fill { height: 100%; background: #5bc478; width: 0%; transition: width 0.1s; }
+
+  select option { background: #252525; }
+
+  .select-wrap { position: relative; }
+  .select-wrap select { padding-right: 32px; }
+  .select-wrap::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 6px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+
+  .color-palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .color-swatch {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s, transform 0.1s;
+    padding: 0;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.active { border-color: #5bc478; }
+  .color-swatch.transparent-swatch {
+    background: repeating-conic-gradient(#999 0% 25%, #555 0% 50%) 0 0 / 8px 8px !important;
+  }
+
+  .visual-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+  }
+  .visual-tile {
+    aspect-ratio: 1;
+    background: #252525;
+    border: 1.5px solid #333;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: border-color 0.12s, background 0.12s;
+    overflow: hidden;
+  }
+  .visual-tile:hover:not(.active) { border-color: #555; }
+  .visual-tile.active { border-color: #5bc478; background: #1c2e22; }
+  .visual-tile canvas { display: block; width: 100%; height: 100%; }
+
+  textarea, input[type=text] {
+    width: 100%;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    padding: 8px 10px;
+    outline: none;
+  }
+  textarea:hover, textarea:focus,
+  input[type=text]:hover, input[type=text]:focus { border-color: #555; }
+  textarea { min-height: 60px; line-height: 1.5; resize: vertical; }
+
+  .upload-label {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #aaa;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  .upload-label:hover { border-color: #555; color: #fff; }
+  .upload-hint { font-size: 12px; color: #666; margin-top: 4px; display: block; }
+</style>
+</head>
+<body>
+
+<div id="preview-area">
+  <div id="anim-type-bar">
+    <div class="select-wrap">
+      <select id="type-select">
+        <option value="concentric">Concentric</option>
+        <option value="balldrop">Ball Drop</option>
+        <option value="ambient">Ambient</option>
+        <option value="revolve">3D Revolve</option>
+      </select>
+    </div>
+    <div class="style-toggle concentric-only" id="style-toggle-bar">
+      <button class="style-btn active" data-style="fluid">Fluid</button>
+      <button class="style-btn" data-style="pulse">Pulse</button>
+    </div>
+  </div>
+  <div id="preview-wrap">
+    <canvas id="preview"></canvas>
+  </div>
+</div>
+
+<div id="sidebar">
+  <div class="control-group not-balldrop">
+    <label>Body Shape</label>
+    <div class="visual-grid" id="shape-grid"></div>
+  </div>
+
+  <div class="control-group not-balldrop">
+    <label>Eyes</label>
+    <div class="visual-grid" id="eyes-grid"></div>
+  </div>
+
+  <div class="control-group concentric-only">
+    <label for="theme-select">Color Theme</label>
+    <select id="theme-select"></select>
+  </div>
+
+  <div class="control-group ambient-only">
+    <label>Avatar Color</label>
+    <div class="color-palette" id="ambient-palette"></div>
+  </div>
+
+  <div class="control-group ambient-only">
+    <label>Background</label>
+    <div class="color-palette" id="ambient-bg-palette"></div>
+  </div>
+
+  <div class="control-group ambient-only">
+    <label>Eye Movement</label>
+    <div class="range-row">
+      <input type="range" id="eye-range" min="1" max="10" step="1" value="5">
+      <span class="range-val" id="eye-range-val">5</span>
+    </div>
+  </div>
+
+  <div class="control-group balldrop-only">
+    <label>Gravity</label>
+    <div class="range-row">
+      <input type="range" id="gravity-range" min="1" max="10" step="1" value="5">
+      <span class="range-val" id="gravity-val">5</span>
+    </div>
+  </div>
+
+  <div class="control-group balldrop-only">
+    <label>Avatar Count</label>
+    <div class="range-row">
+      <input type="range" id="count-range" min="3" max="30" step="1" value="12">
+      <span class="range-val" id="count-val">12</span>
+    </div>
+  </div>
+
+  <div class="control-group balldrop-only">
+    <label>Avatar Size</label>
+    <div class="ratio-group">
+      <button class="size-btn ratio-btn" data-size="small">S</button>
+      <button class="size-btn ratio-btn active" data-size="medium">M</button>
+      <button class="size-btn ratio-btn" data-size="large">L</button>
+    </div>
+  </div>
+
+  <div class="control-group balldrop-only">
+    <label>Background</label>
+    <div class="color-palette" id="bd-bg-palette"></div>
+  </div>
+
+  <div class="control-group">
+    <div class="label-row">
+      <label>Aspect Ratio</label>
+      <button class="pencil-btn" id="custom-size-toggle" title="Custom size"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.1157 1.83654L2.87072 9.08154C2.59984 9.35309 2.39342 9.68202 2.26672 10.044L1.06372 13.4795C0.991498 13.6822 0.978538 13.9013 1.02636 14.1111C1.07418 14.3209 1.18079 14.5127 1.33372 14.664C1.48514 14.817 1.67701 14.9237 1.88688 14.9716C2.09674 15.0196 2.31591 15.0067 2.51872 14.9345L5.95522 13.732C6.31694 13.6048 6.64562 13.3982 6.91722 13.1275L14.1622 5.88204C14.698 5.34512 14.9989 4.61757 14.9989 3.85904C14.9989 3.10052 14.698 2.37297 14.1622 1.83604C13.6251 1.30035 12.8975 0.999512 12.139 0.999512C11.3804 0.999512 10.6528 1.30035 10.1157 1.83604V1.83654ZM2.18922 13.991C2.16403 14.0009 2.13646 14.003 2.11007 13.9971C2.08368 13.9911 2.05969 13.9773 2.04122 13.9575C2.02159 13.9392 2.00791 13.9154 2.00194 13.8892C1.99596 13.863 1.99798 13.8356 2.00772 13.8105L3.06972 10.778L5.22172 12.93L2.18922 13.991ZM13.4542 2.54404C13.8026 2.89329 13.9983 3.36647 13.9983 3.85979C13.9983 4.35311 13.8026 4.82629 13.4542 5.17554L6.20922 12.4205C6.19572 12.4345 6.17772 12.444 6.16322 12.4575L3.54122 9.83554C3.55472 9.82104 3.56422 9.80304 3.57822 9.78904L10.8232 2.54404C10.9959 2.37115 11.2011 2.23409 11.4269 2.14073C11.6528 2.04738 11.8948 1.99956 12.1392 2.00004C12.6157 2.00004 13.0912 2.18104 13.4542 2.54404Z" fill="#757677"/></svg></button>
+    </div>
+    <div class="ratio-group">
+      <button class="ratio-btn active" data-ratio="1:1">1:1</button>
+      <button class="ratio-btn" data-ratio="4:3">4:3</button>
+      <button class="ratio-btn" data-ratio="3:4">3:4</button>
+    </div>
+    <div class="custom-size-row" id="custom-size-row">
+      <input type="number" id="custom-w" placeholder="W" min="100" max="4000" value="800">
+      <span class="custom-size-sep">×</span>
+      <input type="number" id="custom-h" placeholder="H" min="100" max="4000" value="600">
+      <button class="custom-size-apply" id="custom-size-apply">Apply</button>
+    </div>
+  </div>
+
+  <div class="control-group anim-speed">
+    <label>Animation Speed</label>
+    <div class="range-row">
+      <input type="range" id="speed-range" min="1" max="20" step="1" value="4">
+      <span class="range-val" id="speed-val">4</span>
+    </div>
+  </div>
+
+  <div class="control-group concentric-only">
+    <label>Thickness</label>
+    <div class="range-row">
+      <input type="range" id="spacing-range" min="5" max="28" step="1" value="14">
+      <span class="range-val" id="spacing-val">14</span>
+    </div>
+  </div>
+
+  <div class="control-group revolve-only">
+    <label>Rotation Direction</label>
+    <div class="revolve-axis-btns" id="revolve-axis-btns">
+      <button class="axis-btn active" data-axis="horizontal" title="Horizontal">↔</button>
+      <button class="axis-btn"        data-axis="vertical"   title="Vertical">↕</button>
+      <button class="axis-btn"        data-axis="diagonal1"  title="Diagonal ↗">↗</button>
+      <button class="axis-btn"        data-axis="diagonal2"  title="Diagonal ↘">↘</button>
+    </div>
+  </div>
+
+  <div class="control-group revolve-only">
+    <label>Disc Color</label>
+    <div class="color-palette" id="revolve-disc-palette"></div>
+  </div>
+
+  <div class="control-group revolve-only">
+    <label>Background</label>
+    <div class="color-palette" id="revolve-bg-palette"></div>
+  </div>
+
+  <hr class="divider">
+
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <button id="export-btn">Export GIF</button>
+    <div class="progress-bar-wrap" id="progress-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    <div id="export-progress"></div>
+  </div>
+</div>
+
+<script>
+// ─── SVG PATH DATA ───────────────────────────────────────────────────────────
+
+const SHAPES = {
+  1:  'M4 0.625H12C13.864 0.625 15.375 2.13604 15.375 4V6.66699C15.3752 7.74829 16.2517 8.62482 17.333 8.625H20C21.864 8.625 23.375 10.136 23.375 12V20C23.375 21.864 21.864 23.375 20 23.375H12C10.136 23.375 8.625 21.864 8.625 20V17.333C8.62482 16.2517 7.74829 15.3752 6.66699 15.375H4C2.13634 15.3749 0.62523 13.8637 0.625 12V4C0.625 2.19449 2.04307 0.720501 3.82617 0.629883L4 0.625Z',
+  2:  'M12 0.625C15.2377 0.625 18.1383 1.28253 20.2061 2.31641C22.311 3.36895 23.375 4.70747 23.375 6L23.3701 6.16016C23.3167 6.9606 22.8618 7.76862 21.9834 8.52734C21.8459 8.64607 21.7666 8.81838 21.7666 9C21.7666 9.18162 21.8459 9.35393 21.9834 9.47266C22.9204 10.282 23.375 11.1474 23.375 12L23.3701 12.1602C23.3167 12.9606 22.8618 13.7686 21.9834 14.5273C21.8459 14.6461 21.7666 14.8184 21.7666 15C21.7666 15.1816 21.846 15.3539 21.9834 15.4727C22.9204 16.282 23.375 17.1475 23.375 18C23.3749 19.2925 22.311 20.631 20.2061 21.6836C18.1383 22.7175 15.2377 23.375 12 23.375L11.3975 23.3672C8.40335 23.2912 5.73256 22.6529 3.79395 21.6836C1.68902 20.631 0.625065 19.2925 0.625 18C0.625 17.1476 1.0801 16.2823 2.01758 15.4727C2.15505 15.3539 2.23438 15.1816 2.23438 15C2.23437 14.8184 2.15505 14.6461 2.01758 14.5273C1.08009 13.7177 0.625 12.8524 0.625 12L0.629883 11.8398C0.683408 11.0395 1.13874 10.2316 2.01758 9.47266C2.15505 9.35393 2.23437 9.18164 2.23438 9C2.23438 8.81836 2.15505 8.64607 2.01758 8.52734C1.08009 7.7177 0.625 6.85244 0.625 6L0.637695 5.75684C0.762502 4.54107 1.82075 3.30307 3.79395 2.31641C5.73256 1.3471 8.40332 0.708801 11.3975 0.632812L12 0.625Z',
+  3:  'M18 0.625C19.2925 0.625 20.631 1.68896 21.6836 3.79395C22.7175 5.8617 23.375 8.76232 23.375 12C23.375 15.2377 22.7175 18.1383 21.6836 20.2061C20.631 22.311 19.2925 23.375 18 23.375C17.1474 23.375 16.282 22.9204 15.4727 21.9834C15.3539 21.8459 15.1816 21.7666 15 21.7666C14.8636 21.7666 14.7322 21.8112 14.625 21.8916L14.5273 21.9834C13.718 22.9204 12.8526 23.375 12 23.375C11.1474 23.375 10.282 22.9204 9.47266 21.9834C9.35394 21.8459 9.18162 21.7666 9 21.7666C8.86358 21.7666 8.73224 21.8112 8.625 21.8916L8.52734 21.9834C7.718 22.9204 6.85253 23.375 6 23.375L5.75684 23.3623C4.54108 23.2374 3.30306 22.1792 2.31641 20.2061C1.28252 18.1383 0.625 15.2377 0.625 12L0.632812 11.3975C0.708804 8.40336 1.34709 5.73256 2.31641 3.79395C3.36895 1.68904 4.70752 0.625087 6 0.625C6.85241 0.625 7.7177 1.08012 8.52734 2.01758C8.64607 2.15504 8.81836 2.23437 9 2.23438C9.18164 2.23437 9.35393 2.15504 9.47266 2.01758C10.2823 1.08008 11.1476 0.625 12 0.625C12.8524 0.625 13.7177 1.08008 14.5273 2.01758C14.6461 2.15505 14.8184 2.23437 15 2.23438C15.1816 2.23438 15.3539 2.15505 15.4727 2.01758C16.2823 1.08008 17.1476 0.625001 18 0.625Z',
+  4:  'M4.58105 0.787109C7.41183 0.0875218 10.3698 1.72034 11.3154 4.45117L11.4014 4.71875C11.5277 5.15495 12.0311 5.34171 12.4102 5.11133C12.8607 4.83706 13.3637 4.62361 13.9111 4.48828C16.8453 3.76311 19.9165 5.53301 20.7598 8.43555L23.1592 16.6963C23.9967 19.5799 22.3175 22.492 19.4023 23.2129C16.5596 23.9155 13.588 22.2765 12.6387 19.5342L12.5537 19.2656L12.5498 19.2539C12.4207 18.84 11.9384 18.6641 11.5742 18.8867C11.1238 19.162 10.6209 19.376 10.0723 19.5117C7.14996 20.234 4.09165 18.4717 3.25195 15.5811L0.839844 7.27734C0.00566695 4.40546 1.67781 1.50483 4.58105 0.787109Z',
+  5:  'M12.3334 0.625C14.3218 0.62506 16.0582 1.70567 16.9886 3.31445L17.1732 3.63477L17.5433 3.62695C17.6054 3.62556 17.6302 3.62402 17.6674 3.62402C20.6357 3.62436 23.0424 6.03146 23.0424 9L23.0297 9.36426C22.9729 10.206 22.721 10.9935 22.3207 11.6855L22.139 11.999L22.3207 12.3125C22.7786 13.1035 23.0424 14.0202 23.0424 15L23.0355 15.2764C22.8916 18.1163 20.543 20.3747 17.6674 20.375C17.6227 20.375 17.6323 20.3731 17.5443 20.3711L17.1742 20.3633L16.9896 20.6836C16.0594 22.2934 14.3225 23.3749 12.3334 23.375C10.327 23.3749 8.57772 22.2745 7.65369 20.6416L7.44666 20.2754L7.02869 20.3291C6.35121 20.4176 5.64613 20.3793 4.9447 20.1914C2.0773 19.4229 0.374901 16.4756 1.14294 13.6084C1.26771 13.1428 1.44978 12.7083 1.67908 12.3105L1.85974 11.998L1.67908 11.6855C1.22234 10.8955 0.960336 9.9792 0.960327 9L0.967163 8.72363C1.111 5.88351 3.4594 3.62512 6.33533 3.625C6.56994 3.62501 6.80125 3.64065 7.02869 3.66992L7.44568 3.72363L7.65271 3.35742C8.51893 1.82693 10.1113 0.764547 11.9603 0.637695L12.3334 0.625Z',
+  6:  'M12 0.625C14.5605 0.625 16.7045 2.41623 17.2441 4.81445C17.4589 5.76827 18.2317 6.54114 19.1855 6.75586C21.5838 7.29554 23.375 9.43947 23.375 12C23.375 14.5605 21.5838 16.7045 19.1855 17.2441C18.2317 17.4589 17.4589 18.2317 17.2441 19.1855C16.7045 21.5838 14.5605 23.375 12 23.375C9.43946 23.375 7.29554 21.5838 6.75586 19.1855C6.54113 18.2317 5.76827 17.4589 4.81445 17.2441C2.41623 16.7045 0.625 14.5605 0.625 12L0.629883 11.7607C0.737418 9.30679 2.49132 7.27864 4.81445 6.75586C5.76827 6.54114 6.54113 5.76827 6.75586 4.81445C7.29555 2.41623 9.43947 0.625 12 0.625Z',
+  7:  'M11.8334 0.666992C14.6099 0.667 17.0958 1.47162 18.8705 2.73926C20.6464 4.0078 21.6664 5.70013 21.6664 7.5C21.6664 8.97008 20.9882 10.3619 19.7738 11.5166C19.6414 11.6425 19.5658 11.8173 19.5658 12C19.5658 12.1827 19.6414 12.3575 19.7738 12.4834C20.9882 13.6381 21.6664 15.0299 21.6664 16.5L21.6547 16.8359C21.5361 18.5096 20.5355 20.0714 18.8705 21.2607C17.0958 22.5284 14.6099 23.333 11.8334 23.333L11.3158 23.3242C8.74857 23.2311 6.45993 22.4491 4.79626 21.2607C3.02032 19.9922 2.00038 18.2999 2.00037 16.5C2.00037 15.0299 2.67799 13.6379 3.89197 12.4834C4.02432 12.3575 4.09998 12.1826 4.09998 12C4.09997 11.8174 4.02432 11.6425 3.89197 11.5166C2.67798 10.3621 2.00038 8.97006 2.00037 7.5L2.01208 7.16406C2.13061 5.49036 3.13124 3.92857 4.79626 2.73926C6.45993 1.55092 8.74856 0.76893 11.3158 0.675781L11.8334 0.666992Z',
+  8:  'M12.0586 0.62793C12.3885 0.59837 12.7089 0.870864 12.709 1.27832V4.09375C12.7091 4.59842 13.0352 4.96161 13.4023 5.1123C13.7654 5.26122 14.2374 5.23339 14.5967 4.91406C16.4263 3.28777 18.8276 2.2657 21.3975 2.01074C21.7206 1.97875 22.0417 2.24652 22.042 2.65625V21.3232C22.042 21.733 21.721 22.0008 21.3975 21.9688C18.9882 21.7297 16.7271 20.8166 14.9463 19.3633L14.5967 19.0654L14.457 18.959C14.121 18.742 13.72 18.7378 13.4023 18.8682C13.0351 19.0189 12.709 19.3819 12.709 19.8867V22.6113C12.709 23.0188 12.3884 23.2922 12.0586 23.2627C9.1382 22.9989 6.40179 21.8355 4.32324 19.9648C1.94628 17.8253 0.625 14.9384 0.625 11.9443L0.628906 11.6641C0.708703 8.77057 2.02045 5.99644 4.32324 3.92383C6.40168 2.05323 9.13808 0.891702 12.0586 0.62793Z',
+  9:  'M1.37793 0.625H22.7109C23.1149 0.625 23.3985 0.944892 23.374 1.28809C23.1331 4.66541 21.9521 7.82803 20.042 10.2158C19.947 10.3346 19.8508 10.4514 19.7529 10.5654C19.0505 11.3841 19.0505 12.6159 19.7529 13.4346C19.8508 13.5486 19.947 13.6654 20.042 13.7842C21.9522 16.172 23.1331 19.3346 23.374 22.7119C23.3985 23.0551 23.1149 23.375 22.7109 23.375H1.37793C0.973949 23.375 0.691346 23.0551 0.71582 22.7119C0.956711 19.3347 2.13687 16.1719 4.04688 13.7842C4.14194 13.6654 4.23888 13.5486 4.33691 13.4346C5.04038 12.6162 5.04039 11.3838 4.33691 10.5654C4.23888 10.4514 4.14193 10.3346 4.04688 10.2158C2.13688 7.82807 0.956707 4.66526 0.71582 1.28809C0.691346 0.944911 0.973946 0.625026 1.37793 0.625Z',
+  10: 'M22.7236 0.733765C23.0548 0.704848 23.3749 0.978952 23.375 1.38611V22.7211C23.3748 23.1282 23.0548 23.4014 22.7236 23.3724C19.7574 23.111 16.9786 21.9467 14.8691 20.0717C14.489 19.7338 14.1361 19.3767 13.8105 19.0043C12.8875 17.9482 11.1134 17.9481 10.1904 19.0043C9.86476 19.3771 9.51114 19.7346 9.13086 20.0726C7.02154 21.9474 4.24257 23.1121 1.27637 23.3734C0.94525 23.4023 0.6252 23.1281 0.625 22.7211V1.38708C0.625142 0.979955 0.945212 0.705864 1.27637 0.734741C4.24267 0.996002 7.02151 2.16056 9.13086 4.03552C9.51117 4.37358 9.86484 4.73103 10.1904 5.10388C11.1133 6.16017 12.8867 6.16017 13.8096 5.10388C14.1352 4.73104 14.4888 4.37359 14.8691 4.03552C16.9786 2.1605 19.7574 0.995198 22.7236 0.733765Z',
+  11: 'M9.3335 0.625H14.6665C15.4381 0.624989 16.2521 1.00059 16.9019 1.83594L22.3765 8.87598C23.7075 10.5874 23.7074 13.4116 22.3765 15.123L16.9019 22.1631C16.2519 22.9988 15.4378 23.375 14.6665 23.375H9.3335C8.56224 23.3751 7.7482 22.9989 7.09814 22.1631L1.62354 15.123C0.292612 13.4116 0.292602 10.5874 1.62354 8.87598L7.09814 1.83594C7.74797 1.00055 8.56197 0.624946 9.3335 0.625Z',
+  12: 'M7.33301 0.625H16.667C18.8989 0.625175 20.708 2.43484 20.708 4.66699C20.7079 5.61958 20.3786 6.49343 19.8271 7.18457C19.6901 7.35634 19.6535 7.58714 19.7305 7.79297C19.8075 7.99884 19.9869 8.14988 20.2031 8.18945C22.0076 8.51986 23.375 10.1005 23.375 12C23.375 13.8992 22.0077 15.4791 20.2031 15.8096C19.9869 15.8492 19.8075 16.0002 19.7305 16.2061C19.6535 16.4119 19.6901 16.6427 19.8271 16.8145C20.3787 17.5055 20.7079 18.3799 20.708 19.333L20.7031 19.541C20.5949 21.6765 18.8291 23.3748 16.667 23.375H7.33301C5.10112 23.3748 3.29199 21.5652 3.29199 19.333C3.29206 18.3801 3.62185 17.5058 4.17383 16.8145C4.3109 16.6427 4.34748 16.4119 4.27051 16.2061C4.19346 16.0001 4.01412 15.8491 3.79785 15.8096C1.9929 15.4793 0.62502 13.8994 0.625 12L0.628906 11.8232C0.710683 10.003 2.04927 8.50933 3.79785 8.18945C4.01411 8.1499 4.19344 7.99887 4.27051 7.79297C4.34748 7.58713 4.3109 7.35635 4.17383 7.18457C3.62196 6.49312 3.29208 5.61948 3.29199 4.66699L3.29688 4.45898C3.40161 2.39238 5.05866 0.734815 7.125 0.629883L7.33301 0.625Z',
+  13: 'M15.0918 1.69971C16.524 0.26762 18.8462 0.267567 20.2783 1.69971L22.3018 3.72314C23.7334 5.15539 23.7336 7.47773 22.3018 8.90967L20.5957 10.6147C19.8307 11.3795 19.8299 12.6204 20.5947 13.3853L22.3018 15.0913C23.7335 16.5235 23.7336 18.8458 22.3018 20.2778L20.2783 22.3013C18.8463 23.7333 16.524 23.7331 15.0918 22.3013L13.3848 20.5942C12.62 19.8297 11.3799 19.8295 10.6152 20.5942L8.90918 22.3013C7.47705 23.7333 5.1548 23.7332 3.72266 22.3013L1.69922 20.2778C0.267206 18.8457 0.267195 16.5234 1.69922 15.0913L3.40527 13.3843C4.17004 12.6195 4.17005 11.3795 3.40527 10.6147L1.69922 8.90869C0.267499 7.47661 0.2675 5.15523 1.69922 3.72314L3.72266 1.69971C5.15484 0.267601 7.47703 0.267555 8.90918 1.69971L10.6152 3.40576C11.38 4.1702 12.62 4.1702 13.3848 3.40576L15.0918 1.69971Z',
+  14: 'M9.33301 0.625C13.8614 0.625082 17.5823 4.08222 18.001 8.50098C18.024 8.74455 18.1868 8.95297 18.418 9.0332C21.3039 10.0349 23.375 12.7756 23.375 16L23.3652 16.3799C23.1675 20.2762 19.9455 23.3747 16 23.375C12.7755 23.375 10.0348 21.304 9.0332 18.418C8.963 18.2157 8.79486 18.0654 8.59082 18.0156L8.50098 18.001L8.08984 17.9521C3.86945 17.3493 0.625 13.7202 0.625 9.33301L0.636719 8.88477C0.862592 4.43218 4.43219 0.862484 8.88477 0.636719L9.33301 0.625Z',
+  15: 'M8.13184 4.00244C10.281 1.49988 13.72 1.49974 15.8691 4.00244L21.9346 11.0659C23.6607 13.0762 23.8569 16.28 22.4111 18.5581L22.2656 18.7759C20.9044 20.7192 18.6672 21.3408 16.7549 20.4165L14.627 19.3882C12.9478 18.5765 11.0531 18.5767 9.37402 19.3882L7.24609 20.4165C5.39363 21.312 3.23585 20.7567 1.86523 18.9546L1.73438 18.7759C0.132277 16.4881 0.284476 13.1411 2.06641 11.0659L8.13184 4.00244Z',
+  16: 'M6.66663 0.625H17.3336C19.9337 0.625177 22.0415 2.73293 22.0416 5.33301L22.0299 5.66113C21.918 7.28578 20.9823 8.68454 19.6344 9.44141C19.4576 9.54064 19.3392 9.71932 19.318 9.9209C19.2969 10.1226 19.3755 10.3223 19.528 10.4561C21.0694 11.8089 22.0416 13.7902 22.0416 16C22.0416 20.0731 18.7397 23.375 14.6666 23.375H9.33362C5.26052 23.375 1.95862 20.0731 1.95862 16C1.95862 13.79 2.93132 11.809 4.47327 10.4561C4.62573 10.3223 4.70437 10.1226 4.68323 9.9209C4.66202 9.71927 4.54363 9.54063 4.36682 9.44141C2.92835 8.63415 1.95862 7.09663 1.95862 5.33301C1.95879 2.73277 4.06644 0.625 6.66663 0.625Z',
+};
+
+const EYES = {
+  1:  ['M2.5 0C3.125 6.62053e-09 3.75 0.625 3.75 2.5L3.74316 2.83691C3.67224 4.45066 3.08596 5 2.5 5C1.91404 5 1.32776 4.45066 1.25684 2.83691L1.25 2.5C1.25 0.625 1.875 7.28523e-08 2.5 0Z', 'M7.5 0C8.125 6.62053e-09 8.75 0.625 8.75 2.5L8.74316 2.83691C8.67224 4.45066 8.08596 5 7.5 5C6.91404 5 6.32776 4.45066 6.25684 2.83691L6.25 2.5C6.25 0.625 6.875 7.28523e-08 7.5 0Z'],
+  2:  ['M2.5 0C3.125 3.72505e-08 3.75 0.9375 3.75 3.75H1.25C1.25 0.9375 1.875 8.19588e-08 2.5 0Z', 'M7.5 0C8.125 -8.19589e-08 8.75 0.9375 8.75 3.75H6.25C6.25 0.9375 6.875 8.19589e-08 7.5 0Z'],
+  3:  ['M3.75 5H1.25V0H3.75V5Z', 'M8.75 5H6.25V0H8.75V5Z'],
+  4:  ['M2.5 1.25C3.19036 1.25 3.75 1.80964 3.75 2.5C3.75 4.375 3.125 5 2.5 5C1.875 5 1.25 4.375 1.25 2.5H0.625C0.279822 2.5 0 2.22018 0 1.875C0 1.52982 0.279822 1.25 0.625 1.25H2.5Z', 'M8.75 2.5C8.75 4.375 8.125 5 7.5 5C6.875 5 6.25 4.375 6.25 2.5C6.25 1.80964 6.80964 1.25 7.5 1.25H9.375C9.72018 1.25 10 1.52982 10 1.875C10 2.22018 9.72018 2.5 9.375 2.5H8.75Z'],
+  5:  ['M0.0918449 0.937657C0.281316 0.638787 0.701139 0.536684 1.02934 0.709141L3.40727 1.95914C3.66606 2.20523 3.74614 2.49918 3.65825 2.81266L1.02934 4.29117C0.701155 4.46355 0.281296 4.3615 0.0918449 4.06266C-0.0976288 3.76374 0.0155797 3.38172 0.343798 3.20914L1.69145 2.50016L0.343798 1.79117C0.015645 1.61863 -0.0974708 1.23655 0.0918449 0.937657Z', 'M8.97075 0.709141C9.29898 0.536558 9.71875 0.638735 9.90825 0.937657C10.0976 1.23647 9.98524 1.61852 9.65727 1.79117L8.30766 2.50016L9.65727 3.20914C9.98518 3.38183 10.0977 3.76386 9.90825 4.06266C9.71872 4.36149 9.29894 4.46372 8.97075 4.29117L6.5938 3.04117C6.34185 2.81266 6.25298 2.49918 6.33306 2.20523L8.97075 0.709141Z'],
+  6:  ['M3.125 0C3.47018 3.01766e-08 3.75 0.279822 3.75 0.625C3.75 0.970178 3.47018 1.25 3.125 1.25V3.75C3.125 4.44036 2.56536 5 1.875 5C1.18464 5 0.625 4.44036 0.625 3.75V1.25L0.499023 1.2373C0.214229 1.17902 0 0.927025 0 0.625C1.91242e-07 0.279822 0.279822 3.42493e-08 0.625 0H3.125Z', 'M9.375 0C9.72018 3.01766e-08 10 0.279822 10 0.625C10 0.970178 9.72018 1.25 9.375 1.25V3.75C9.375 4.44036 8.81536 5 8.125 5C7.43464 5 6.875 4.44036 6.875 3.75V1.25C6.52982 1.25 6.25 0.970178 6.25 0.625C6.25 0.279822 6.52982 -3.01762e-08 6.875 0H9.375Z'],
+  7:  ['M2.51122 0.00161691C2.84813 0.215484 2.87805 0.360168 2.85887 0.431304L2.41259 2.1188H3.42333C3.72606 2.33658 3.7567 2.46924 3.74266 2.5358C3.7286 2.6023 3.69559 2.6629 3.64794 2.70962L1.41942 4.90689C1.0288 4.95279 0.892078 4.78873 0.879382 4.57193L1.33055 2.79752H0.326648C0.0229372 2.58658 -0.00655945 2.45232 0.00828874 2.38541C0.0231524 2.31858 0.0572861 2.2579 0.105945 2.21158L2.32274 0.0904841C2.37457 0.0403481 2.44076 0.00888661 2.51122 0.00161691Z', 'M8.76122 0.00161691C9.09813 0.215484 9.12805 0.360168 9.10887 0.431304L8.66259 2.1188H9.67333C9.97606 2.33658 10.0067 2.46924 9.99266 2.5358C9.9786 2.6023 9.94559 2.6629 9.89794 2.70962L7.66942 4.90689C7.2788 4.95279 7.14208 4.78873 7.12938 4.57193L7.58055 2.79752H6.57665C6.27294 2.58658 6.24344 2.45232 6.25829 2.38541C6.27315 2.31858 6.30729 2.2579 6.35595 2.21158L8.57274 0.0904841C8.62457 0.0403481 8.69076 0.00888661 8.76122 0.00161691Z'],
+  8:  ['M1.93082 0.628636C2.29983 0.811019 2.31266 0.824925 2.35563 0.876683C2.38245 0.895778 2.39469 0.936253 2.41617 0.96848L3.66617 3.34543C3.83868 3.67361 3.73647 4.09341 3.43766 4.28293C3.13888 4.47235 2.75684 4.35983 2.58414 4.03196L1.87516 2.68235L1.16617 4.03196C0.993527 4.35989 0.611461 4.47227 0.312657 4.28293C0.0137345 4.09343 -0.0884417 3.67366 0.0841411 3.34543L1.33414 0.96848C1.47574 0.785863 1.53531 0.737035 1.56266 0.716527C1.7137 0.648635 1.75309 0.640355 1.81754 0.628636C1.83636 0.626707 1.91199 0.62676 1.93082 0.628636Z', 'M8.18668 0.629613C8.54792 0.809361 8.55973 0.821995 8.60563 0.876683C8.63245 0.915759 8.64469 0.936253 8.66617 0.96848L9.91617 3.34543C10.0887 3.67359 9.98643 4.09337 9.68766 4.28293C9.38884 4.47237 9.00681 4.35992 8.83414 4.03196L8.12516 2.68235L7.41617 4.03196C7.24354 4.36001 6.86151 4.47236 6.56266 4.28293C6.26373 4.09343 6.16156 3.67366 6.33414 3.34543L7.58414 0.96848C7.72477 0.785863 7.78824 0.736058 7.81266 0.717503C7.96687 0.648635 8.01285 0.638402 8.06168 0.629613C8.08244 0.627267 8.16591 0.627326 8.18668 0.629613Z'],
+  9:  ['M2.79015 1.50209C3.08904 1.32952 3.47104 1.43176 3.64367 1.7306C4.16104 2.62725 3.85458 3.77437 2.95812 4.29213C2.06151 4.80972 0.91449 4.50196 0.396595 3.6056C0.224045 3.30674 0.326333 2.92473 0.625111 2.75209C0.924007 2.57952 1.30601 2.68175 1.47863 2.9806C1.65131 3.27918 2.03434 3.38155 2.33312 3.20912C2.59426 3.05806 2.70509 2.74639 2.61339 2.47084L2.50988 2.24037C2.41778 1.96458 2.52864 1.65321 2.79015 1.50209Z', 'M6.6466 1.7306C6.81921 1.43175 7.20121 1.32952 7.50011 1.50209C7.76148 1.65325 7.87246 1.96465 7.78038 2.24037L7.67687 2.47084C7.58507 2.74657 7.69662 3.05814 7.95812 3.20912C8.25671 3.37981 8.6198 3.31059 8.82056 3.08314L8.88585 2.87806C9.07874 2.66066 9.40363 2.6011 9.66515 2.75209C9.96377 2.92479 10.0662 3.30681 9.89367 3.6056C9.37593 4.50183 8.22967 4.8092 7.33312 4.29213C6.43642 3.77442 6.12906 2.62736 6.6466 1.7306Z'],
+  10: ['M2.76864 0.144924C3.43574 -0.0338225 4.15186 0.476966 4.3536 1.22989C4.78014 2.82279 3.01274 4.59516 2.99521 4.6127C2.97022 4.606 0.553788 3.95436 0.127042 2.36172C-0.0744959 1.60896 0.290226 0.808108 0.95712 0.629299C1.31995 0.532081 1.70824 0.694337 2.00888 0.930081C2.15121 0.57507 2.40597 0.242105 2.76864 0.144924Z', 'M5.62997 1.22989C5.83172 0.476966 6.54784 -0.0338225 7.21493 0.144924C7.5775 0.24221 7.83222 0.575818 7.9747 0.930081C8.27537 0.693808 8.66286 0.532366 9.02548 0.629299C9.69253 0.808036 10.0572 1.60884 9.85556 2.36172C9.42999 3.94994 7.02648 4.60245 6.98837 4.6127C6.98837 4.6127 5.20126 2.83074 5.62997 1.22989Z'],
+  11: ['M7.5 0C7.67259 0 7.81039 0.140692 7.83496 0.311523C7.90186 0.776504 8.11704 1.21079 8.45312 1.54688C8.78921 1.88296 9.2235 2.09814 9.68848 2.16504C9.85931 2.18961 10 2.32741 10 2.5C10 2.67259 9.85931 2.81039 9.68848 2.83496C9.2235 2.90186 8.78921 3.11704 8.45312 3.45312C8.11704 3.78921 7.90186 4.2235 7.83496 4.68848C7.81039 4.85931 7.67259 5 7.5 5C7.32741 5 7.18961 4.85931 7.16504 4.68848C7.09814 4.2235 6.88296 3.78921 6.54688 3.45312C5.77626 2.68251 4.22374 2.68251 3.45312 3.45312C3.11704 3.78921 2.90186 4.2235 2.83496 4.68848C2.81039 4.85931 2.67259 5 2.5 5C2.32741 5 2.18961 4.85931 2.16504 4.68848C2.09814 4.2235 1.88296 3.78921 1.54688 3.45312C1.21079 3.11704 0.776504 2.90186 0.311523 2.83496C0.140692 2.81039 0 2.67259 0 2.5C0 2.32741 0.140692 2.18961 0.311523 2.16504C0.776504 2.09814 1.21079 1.88296 1.54688 1.54688C1.88296 1.21079 2.09814 0.776504 2.16504 0.311523C2.18961 0.140692 2.32741 0 2.5 0C2.67259 0 2.81039 0.140692 2.83496 0.311523C2.90186 0.776504 3.11704 1.21079 3.45312 1.54688C4.22359 2.31734 5.77641 2.31734 6.54688 1.54688C6.88296 1.21079 7.09814 0.776504 7.16504 0.311523C7.18961 0.140692 7.32741 0 7.5 0Z'],
+  12: ['M2.5 0C2.72804 0 2.94531 0.056852 3.14746 0.15625C2.82735 0.330933 2.53089 0.661532 2.36816 1.06641C2.10284 1.72663 2.29312 2.33428 2.79297 2.42383C3.29257 2.51307 3.91184 2.05091 4.17773 1.3916C4.30211 1.72591 4.375 2.10152 4.375 2.5C4.375 3.88071 3.53553 5 2.5 5C1.46447 5 0.625 3.88071 0.625 2.5C0.625 1.11929 1.46447 0 2.5 0Z', 'M7.5 0C7.7661 0 8.01876 0.0747472 8.24805 0.208008C7.95301 0.392511 7.68507 0.708579 7.53223 1.08887C7.26439 1.75558 7.4521 2.36868 7.95215 2.45801C8.4015 2.53824 8.94795 2.16699 9.24902 1.60742C9.32866 1.88485 9.375 2.18524 9.375 2.5C9.375 3.88071 8.53553 5 7.5 5C6.46447 5 5.625 3.88071 5.625 2.5C5.625 1.11929 6.46447 0 7.5 0Z'],
+};
+
+const SHAPE_NAMES = {1:'Shape 1 — L-Bracket',2:'Shape 2 — Pill Row',3:'Shape 3 — Pill Column',4:'Shape 4 — Diagonal',5:'Shape 5 — Hex',6:'Shape 6 — Rounded Square',7:'Shape 7 — Stadium',8:'Shape 8 — Asymmetric',9:'Shape 9 — Hourglass',10:'Shape 10 — Bowtie',11:'Shape 11 — Diamond',12:'Shape 12 — Dumbbell',13:'Shape 13 — Cross',14:'Shape 14 — Organic',15:'Shape 15 — Shield',16:'Shape 16 — Figure-8'};
+const EYE_NAMES = {1:'Eyes 1 — Teardrops',2:'Eyes 2 — Triangles',3:'Eyes 3 — Rectangles',4:'Eyes 4 — Hooks',5:'Eyes 5 — Arrows In',6:'Eyes 6 — Pins',7:'Eyes 7 — Lightning',8:'Eyes 8 — Chevrons',9:'Eyes 9 — Arcs',10:'Eyes 10 — Petals',11:'Eyes 11 — Sparkles',12:'Eyes 12 — Crescents'};
+
+const THEMES = [
+  { name: 'Lime',     colors: ['#5BC478', '#B8E86A'] },
+  { name: 'Ocean',    colors: ['#3D8FE0', '#7EC8E3'] },
+  { name: 'Coral',    colors: ['#E06050', '#F5A070'] },
+  { name: 'Lavender', colors: ['#7B5CC8', '#B8A0E8'] },
+  { name: 'Gold',     colors: ['#D49C20', '#F5D060'] },
+  { name: 'Rose',     colors: ['#C83870', '#F08090'] },
+  { name: 'Midnight', colors: ['#1E2A6E', '#3050B0'] },
+  { name: 'Slate',    colors: ['#3A4050', '#6070A0'] },
+  { name: 'Punch',    colors: ['#FF3DAD', '#7765E3'] },
+  { name: 'Zap',      colors: ['#FFE000', '#3B5BFF'] },
+  { name: 'Tropic',   colors: ['#FF5C35', '#00C9A7'] },
+  { name: 'Arcade',   colors: ['#44E560', '#FF1B6B'] },
+  { name: 'Dusk',     colors: ['#FF8C00', '#6A0DAD'] },
+  { name: 'Wave',     colors: ['#00B4D8', '#FF6B6B'] },
+];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+
+const state = {
+  shape: 6,
+  eyes: 1,
+  theme: 0,
+  ratio: '1:1',
+  speed: 4,
+  animStyle: 'fluid',
+  animType: 'concentric',
+  concentricSpacing: 14,
+  avatarCount: 12,
+  avatarSize: 'medium',
+  bdBgColor: '#ffffff',
+  bdGravity: 5,
+  ambientColor: '#79ABFF',
+  ambientBgColor: '#F2F2F2',
+  ambientEyeRange: 5,
+  revolveDiscColor: '#79ABFF',
+  revolveBgColor: '#111111',
+  revolveAxis: 'horizontal',
+};
+
+let animId = null;
+let startTime = null;
+let gifWorkerURL = null;
+
+// ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
+
+const SIZES = { '1:1': [600,600], '4:3': [800,600], '3:4': [600,800] };
+
+const canvas = document.getElementById('preview');
+const ctx = canvas.getContext('2d');
+
+function applyCanvasSize() {
+  const [w, h] = SIZES[state.ratio];
+  canvas.width = w;
+  canvas.height = h;
+  fitPreview();
+}
+
+function fitPreview() {
+  const [w, h] = SIZES[state.ratio];
+  const wrap = document.getElementById('preview-wrap');
+  const maxW = wrap.clientWidth - 16;
+  const maxH = wrap.clientHeight - 16;
+  const scale = Math.min(maxW / w, maxH / h, 1);
+  canvas.style.width  = (w * scale) + 'px';
+  canvas.style.height = (h * scale) + 'px';
+}
+
+window.addEventListener('resize', fitPreview);
+
+// ─── TILE RENDERERS ──────────────────────────────────────────────────────────
+
+function drawShapeTile(cvs, idx) {
+  const sz = 112;
+  cvs.width = sz; cvs.height = sz;
+  const c = cvs.getContext('2d');
+  const scale = sz * 0.6 / 24;
+  c.translate(sz / 2, sz / 2);
+  c.scale(scale, scale);
+  c.translate(-12, -12);
+  const path = new Path2D(SHAPES[idx]);
+  c.fillStyle = '#fff'; c.fill(path);
+  c.strokeStyle = '#000'; c.lineWidth = 1.5; c.stroke(path);
+}
+
+function drawEyeTile(cvs, idx) {
+  const sz = 112;
+  cvs.width = sz; cvs.height = sz;
+  const c = cvs.getContext('2d');
+  const scale = sz * 0.55 / 10;
+  c.translate(sz / 2, sz / 2);
+  c.scale(scale, scale);
+  c.translate(-5, -2.5);
+  c.fillStyle = '#fff';
+  for (const p of EYES[idx]) c.fill(new Path2D(p));
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+
+// Eye offsets for shapes where the face region isn't at the shape's geometric center.
+// Values are [tx, ty] in the 24×24 shape coordinate system (default is [7, 9.5]).
+const SHAPE_EYE_OFFSETS = {
+  1:  [3,   6  ],  // Z-tetromino: eyes near bottom of upper-left block
+  14: [4,   6  ],  // diagonal blob: eyes in upper-left region
+  16: [7,   13 ],  // figure-8: eyes in lower (larger) lobe
+};
+
+// totalPhase: continuously-increasing value (rings scrolled past center total).
+// Each ring k has absolute color k%2. Its distance from center = (totalPhase - k) * spacing.
+// After exactly 2 ring-widths scroll by, the visual state is identical → seamless loop.
+function drawFrame(target, w, h, totalPhase) {
+  const cx = w / 2, cy = h / 2;
+  const cornerR = Math.sqrt(cx * cx + cy * cy);
+  const spacing  = Math.min(w, h) * (state.concentricSpacing / 100);
+  // Need outermost ring scale >= 2.5 × cornerR to guarantee shapes bleed past every corner.
+  // Shape reach ≈ half its bounding box, so scale must be > 2 × cornerR.
+  const numRings = Math.ceil(4 * cornerR / spacing) + 2;
+  const tmSize   = Math.min(w, h) * 0.27;
+
+  const theme     = THEMES[state.theme];
+  const shapePath = SHAPES[state.shape];
+  const eyePaths  = EYES[state.eyes];
+  const baseK     = Math.floor(totalPhase);
+
+  // Background matches the outermost ring's color — if any shape ever leaves a hairline
+  // gap at the corners the fill blends rather than flashing.
+  const outerK = baseK - numRings;
+  target.fillStyle = theme.colors[((outerK % 2) + 2) % 2];
+  target.fillRect(0, 0, w, h);
+
+  // Rings expand outward: ring k born at totalPhase=k, age = totalPhase - k = its scale.
+  // Draw oldest (largest) first so newer rings paint over the center.
+  for (let i = numRings; i >= 0; i--) {
+    const k   = baseK - i;
+    const pos = totalPhase - k;      // grows over time → ring moves outward
+    const sc  = pos * spacing;
+    if (sc <= 0) continue;
+    const s = sc / 24;
+    target.save();
+    target.translate(cx, cy);
+    target.scale(s, s);
+    target.translate(-12, -12);
+    target.fillStyle = theme.colors[((k % 2) + 2) % 2];
+    target.fill(new Path2D(shapePath));
+    target.restore();
+  }
+
+  // Teammate — white fill + black stroke + eyes
+  const ts = tmSize / 24;
+  target.save();
+  target.translate(cx, cy);
+  target.scale(ts, ts);
+  target.translate(-12, -12);
+  const sp = new Path2D(shapePath);
+  target.fillStyle = '#ffffff';
+  target.fill(sp);
+  target.strokeStyle = '#000000';
+  target.lineWidth = 1.5;
+  target.stroke(sp);
+  const [cex, cey] = SHAPE_EYE_OFFSETS[state.shape] ?? [7, 9.5];
+  target.translate(cex, cey);
+  target.fillStyle = '#000000';
+  for (const p of eyePaths) target.fill(new Path2D(p));
+  target.restore();
+}
+
+function loop(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed    = (ts - startTime) / 1000;
+  const speedRings = state.speed * 0.15;
+  const rawPhase   = elapsed * speedRings;
+
+  let totalPhase;
+  if (state.animStyle === 'pulse') {
+    // Ease-out from center: subtract modulation so rings start slow near center
+    // and accelerate outward. Amplitude 0.30 gives ~6% min speed / ~194% max speed.
+    totalPhase = rawPhase - 0.30 * Math.sin(rawPhase * Math.PI);
+  } else {
+    totalPhase = rawPhase;
+  }
+
+  const [w, h] = SIZES[state.ratio];
+  drawFrame(ctx, w, h, totalPhase);
+  animId = requestAnimationFrame(loop);
+}
+
+function startAnim() {
+  if (animId) cancelAnimationFrame(animId);
+  startTime = null;
+  balls = []; bdSpawned = 0; bdResetAt = -1; bdPrevElapsed = 0;
+  bdConfigs = buildBallConfigs(state.avatarCount, Math.random);
+  ambientPrevT = 0; ambientLookX = 0; ambientLookY = 0;
+  ambientTargetX = 0; ambientTargetY = 0;
+  ambientBlinking = false; ambientBlinkT = 0; ambientNextEvent = 1.2;
+  const fn = state.animType === 'balldrop' ? loopBallDrop
+           : state.animType === 'ambient'  ? loopAmbient
+           : state.animType === 'revolve'  ? loopRevolve
+           : loop;
+  animId = requestAnimationFrame(fn);
+}
+
+function updateControlVisibility() {
+  const t = state.animType;
+  document.querySelectorAll('.concentric-only').forEach(el => el.style.display = t === 'concentric' ? '' : 'none');
+  document.querySelectorAll('.balldrop-only').forEach(el =>   el.style.display = t === 'balldrop'   ? '' : 'none');
+  document.querySelectorAll('.ambient-only').forEach(el =>    el.style.display = t === 'ambient'    ? '' : 'none');
+  document.querySelectorAll('.revolve-only').forEach(el =>    el.style.display = t === 'revolve'    ? '' : 'none');
+  document.querySelectorAll('.not-balldrop').forEach(el =>    el.style.display = t !== 'balldrop'   ? '' : 'none');
+  document.querySelectorAll('.anim-speed').forEach(el =>      el.style.display = (t === 'concentric' || t === 'revolve') ? '' : 'none');
+}
+
+// ─── BALL DROP ───────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  '#FF878A','#FEA06A','#F7BD51','#F6D861','#C3E684',
+  '#85D7A2','#77D3E9','#A1E7DD','#79ABFF','#B8ACFF',
+  '#E39EF2','#FAAEE9','#FF95C9','#FFAFC1',
+];
+
+const BALL_SIZES = { small: 0.055, medium: 0.08, large: 0.115 };
+const GRAVITY    = 1400;   // px/s²
+const RESTITUTION = 0.38;
+const SUBSTEPS   = 3;
+
+let balls        = [];
+let bdSpawned    = 0;
+let bdPrevElapsed = 0;
+let bdResetAt    = -1;
+let bdConfigs    = [];
+
+function seededRng(seed) {
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+function buildBallConfigs(count, rng) {
+  // Build cycling shuffled arrays so every shape/eye/color appears before repeating
+  const shapes = [], eyes = [], colors = [];
+  for (let i = 0; i < count; i++) shapes.push((i % 16) + 1);
+  for (let i = 0; i < count; i++) eyes.push((i % 12) + 1);
+  for (let i = 0; i < count; i++) colors.push(AVATAR_COLORS[i % AVATAR_COLORS.length]);
+  // Fisher-Yates shuffle each independently
+  const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } };
+  shuffle(shapes); shuffle(eyes); shuffle(colors);
+  return shapes.map((s, i) => ({ shape: s, eyes: eyes[i], color: colors[i] }));
+}
+
+function makeBall(w, r, rng, cfg) {
+  return {
+    x: r + rng() * (w - 2 * r),
+    y: -r * 1.5,
+    vx: (rng() - 0.5) * 120,
+    vy: rng() * 60,
+    angle: 0,
+    angularVel: (rng() - 0.5) * 0.4,
+    r,
+    shape: cfg.shape,
+    eyes:  cfg.eyes,
+    color: cfg.color,
+  };
+}
+
+function stepBalls(bs, dt, w, h) {
+  const sub = dt / SUBSTEPS;
+  for (let s = 0; s < SUBSTEPS; s++) {
+    for (const b of bs) {
+      b.vy += (state.bdGravity * 280) * sub;
+      b.x  += b.vx * sub;
+      b.y  += b.vy * sub;
+      b.angle += b.angularVel * sub;
+      b.angularVel *= 0.85;
+      if (Math.abs(b.angularVel) < 0.05) b.angularVel = 0;
+      // stop spinning when ball has settled
+      if (Math.abs(b.vx) < 25 && Math.abs(b.vy) < 25) b.angularVel = 0;
+      // floor
+      if (b.y + b.r > h) {
+        b.y = h - b.r;
+        if (Math.abs(b.vy) > 40) b.angularVel += (-b.vx / b.r) * 0.06;
+        b.vy *= -RESTITUTION; b.vx *= 0.82;
+        if (Math.abs(b.vy) < 18) b.vy = 0;
+      }
+      // walls
+      if (b.x - b.r < 0)  { b.x = b.r;     b.vx *= -RESTITUTION; b.angularVel *= -0.3; }
+      if (b.x + b.r > w)  { b.x = w - b.r; b.vx *= -RESTITUTION; b.angularVel *= -0.3; }
+    }
+    for (let i = 0; i < bs.length; i++) {
+      for (let j = i + 1; j < bs.length; j++) {
+        const a = bs[i], b = bs[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist2 = dx*dx + dy*dy;
+        const minD  = a.r + b.r;
+        if (dist2 >= minD * minD) continue;
+        const dist = Math.sqrt(dist2) || 0.001;
+        const nx = dx / dist, ny = dy / dist;
+        const overlap = (minD - dist) * 0.5;
+        a.x -= nx * overlap; a.y -= ny * overlap;
+        b.x += nx * overlap; b.y += ny * overlap;
+        const dvx = b.vx - a.vx, dvy = b.vy - a.vy;
+        const dot = dvx * nx + dvy * ny;
+        if (dot >= 0) continue;
+        const imp = (1 + RESTITUTION) * dot * 0.5;
+        a.vx += imp * nx; a.vy += imp * ny;
+        b.vx -= imp * nx; b.vy -= imp * ny;
+        // tangential impulse → spin
+        const dvt = dvx * (-ny) + dvy * nx;
+        a.angularVel += (dvt / a.r) * 0.015;
+        b.angularVel -= (dvt / b.r) * 0.015;
+      }
+    }
+  }
+}
+
+function drawAvatar(t, b) {
+  const { x, y, r, angle, shape, eyes, color } = b;
+  t.save();
+  t.translate(x, y);
+  t.rotate(angle);
+  // circle background
+  t.beginPath(); t.arc(0, 0, r, 0, Math.PI * 2);
+  t.fillStyle = color; t.fill();
+  // body — fits ~68% of circle diameter
+  const bodyS = (r * 1.36) / 24;
+  t.translate(0, -r * 0.04);
+  t.scale(bodyS, bodyS);
+  t.translate(-12, -12);
+  const sp = new Path2D(SHAPES[shape]);
+  t.fillStyle = '#fff'; t.fill(sp);
+  t.strokeStyle = '#000'; t.lineWidth = 1.5; t.stroke(sp);
+  const [ex, ey] = SHAPE_EYE_OFFSETS[shape] ?? [7, 9.5];
+  t.translate(ex, ey);
+  t.fillStyle = '#000';
+  for (const p of EYES[eyes]) t.fill(new Path2D(p));
+  t.restore();
+}
+
+function loopBallDrop(ts) {
+  if (!startTime) { startTime = ts; bdPrevElapsed = 0; }
+  const elapsed  = (ts - startTime) / 1000;
+  const dt       = Math.min(elapsed - bdPrevElapsed, 0.05);
+  bdPrevElapsed  = elapsed;
+
+  const [w, h] = SIZES[state.ratio];
+  const r      = w * BALL_SIZES[state.avatarSize];
+  const spawnInterval = Math.max(0.25, 3.5 / state.avatarCount);
+
+  if (bdSpawned < state.avatarCount && elapsed >= bdSpawned * spawnInterval) {
+    const rng = seededRng(bdSpawned * 999 + 1);
+    balls.push(makeBall(w, r, rng, bdConfigs[bdSpawned]));
+    bdSpawned++;
+  }
+
+  // auto-reset once all settled
+  const allSettled = bdSpawned >= state.avatarCount &&
+    balls.every(b => Math.abs(b.vy) < 8 && Math.abs(b.vx) < 8);
+  if (allSettled && bdResetAt < 0) bdResetAt = elapsed;
+  if (bdResetAt > 0 && elapsed - bdResetAt > 1.8) {
+    balls = []; bdSpawned = 0; bdResetAt = -1; startTime = ts; bdPrevElapsed = 0;
+    bdConfigs = buildBallConfigs(state.avatarCount, Math.random);
+  }
+
+  stepBalls(balls, dt, w, h);
+
+  if (state.bdBgColor === 'transparent') { ctx.clearRect(0, 0, w, h); } else { ctx.fillStyle = state.bdBgColor; ctx.fillRect(0, 0, w, h); }
+  for (const b of balls) drawAvatar(ctx, b);
+
+  animId = requestAnimationFrame(loopBallDrop);
+}
+
+// ─── AMBIENT ─────────────────────────────────────────────────────────────────
+
+let ambientPrevT = 0, ambientLookX = 0, ambientLookY = 0;
+let ambientTargetX = 0, ambientTargetY = 0;
+let ambientBlinking = false, ambientBlinkT = 0, ambientNextEvent = 1.2;
+
+function drawAmbientAvatar(t, cx, cy, r, shape, eyes, color, lookX, lookY, blinkScale) {
+  t.save();
+  t.translate(cx, cy);
+  t.beginPath(); t.arc(0, 0, r, 0, Math.PI * 2);
+  t.fillStyle = color; t.fill();
+  const bodyS = (r * 1.22) / 24;
+  t.translate(0, -r * 0.04);
+  t.scale(bodyS, bodyS);
+  t.translate(-12, -12);
+  const sp = new Path2D(SHAPES[shape]);
+  t.fillStyle = '#fff'; t.fill(sp);
+  t.strokeStyle = '#000'; t.lineWidth = 1.5; t.stroke(sp);
+  const [ex, ey] = SHAPE_EYE_OFFSETS[shape] ?? [7, 9.5];
+  t.translate(ex + lookX, ey + lookY);
+  t.save();
+  t.translate(5, 2.5); t.scale(1, blinkScale); t.translate(-5, -2.5);
+  t.fillStyle = '#000';
+  for (const p of EYES[eyes]) t.fill(new Path2D(p));
+  t.restore();
+  t.restore();
+}
+
+function loopAmbient(ts) {
+  if (!startTime) { startTime = ts; ambientPrevT = 0; }
+  const elapsed = (ts - startTime) / 1000;
+  const dt = Math.min(elapsed - ambientPrevT, 0.05);
+  ambientPrevT = elapsed;
+
+  const lerpSpd = 2 + state.ambientEyeRange * 0.7;
+  ambientLookX += (ambientTargetX - ambientLookX) * lerpSpd * dt;
+  ambientLookY += (ambientTargetY - ambientLookY) * lerpSpd * dt;
+
+  let blinkScale = 1;
+  if (ambientBlinking) {
+    ambientBlinkT += dt * 9;
+    if (ambientBlinkT >= 1) { ambientBlinkT = 0; ambientBlinking = false; }
+    blinkScale = Math.abs(1 - 2 * ambientBlinkT);
+  }
+
+  if (elapsed > ambientNextEvent) {
+    const es = state.ambientEyeRange / 5;
+    const roll = Math.random();
+    if (roll < 0.25) {
+      ambientBlinking = true; ambientBlinkT = 0;
+      ambientNextEvent = elapsed + (0.5 + Math.random() * 2) / es;
+    } else if (roll < 0.65) {
+      ambientTargetX = (Math.random() - 0.5) * 3 * es;
+      ambientTargetY = (Math.random() - 0.5) * 1.5 * es;
+      ambientNextEvent = elapsed + (0.6 + Math.random() * 1.5) / es;
+    } else {
+      ambientTargetX = 0; ambientTargetY = 0;
+      ambientNextEvent = elapsed + (1 + Math.random() * 1.5) / es;
+    }
+  }
+
+  const [w, h] = SIZES[state.ratio];
+  if (state.ambientBgColor === 'transparent') { ctx.clearRect(0, 0, w, h); } else { ctx.fillStyle = state.ambientBgColor; ctx.fillRect(0, 0, w, h); }
+  const r = Math.min(w, h) * 0.3;
+  drawAmbientAvatar(ctx, w / 2, h / 2, r, state.shape, state.eyes, state.ambientColor, ambientLookX, ambientLookY, blinkScale);
+  animId = requestAnimationFrame(loopAmbient);
+}
+
+// ─── 3D REVOLVE ──────────────────────────────────────────────────────────────
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function lightenHex(hex, t) {
+  const [r,g,b] = hexToRgb(hex);
+  return `rgb(${Math.round(r+(255-r)*t)},${Math.round(g+(255-g)*t)},${Math.round(b+(255-b)*t)})`;
+}
+function darkenHex(hex, t) {
+  const [r,g,b] = hexToRgb(hex);
+  return `rgb(${Math.round(r*(1-t))},${Math.round(g*(1-t))},${Math.round(b*(1-t))})`;
+}
+// HSL-based tonal shift — keeps hue & saturation, only moves lightness.
+// delta is in lightness units (-100..+100).
+function tonalShift(hex, delta) {
+  const [r,g,b] = hexToRgb(hex).map(x => x/255);
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h=0, s=0, l=(max+min)/2;
+  if (max !== min) {
+    const d = max-min;
+    s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+    if      (max===r) h = (g-b)/d + (g<b?6:0);
+    else if (max===g) h = (b-r)/d + 2;
+    else              h = (r-g)/d + 4;
+    h /= 6;
+  }
+  l = Math.max(0, Math.min(1, l + delta/100));
+  let R,G,B;
+  if (s===0) { R=G=B=l; } else {
+    const q = l<0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+    const hue2rgb = t => {
+      if (t<0) t+=1; if (t>1) t-=1;
+      if (t<1/6) return p+(q-p)*6*t;
+      if (t<1/2) return q;
+      if (t<2/3) return p+(q-p)*(2/3-t)*6;
+      return p;
+    };
+    R=hue2rgb(h+1/3); G=hue2rgb(h); B=hue2rgb(h-1/3);
+  }
+  return `rgb(${Math.round(R*255)},${Math.round(G*255)},${Math.round(B*255)})`;
+}
+
+function drawRevolveFrame(target, w, h, elapsed) {
+  const cx = w / 2, cy = h / 2;
+  const R       = Math.min(w, h) * 0.38;
+  const thick   = R * 0.14;
+  const strokeW = R * 0.022;
+
+  const rps  = state.speed * 0.1;
+  const a    = elapsed * rps * Math.PI * 2;
+  const cosA = Math.cos(a);
+  const sinA = Math.sin(a);
+  const absC = Math.abs(cosA);
+
+  const base = state.revolveDiscColor;
+
+  // θ = angle of the spin axis from horizontal.
+  // π/2 → vertical axis  = horizontal spin (left-right)
+  // 0   → horizontal axis = vertical spin  (up-down)
+  // π/4 / -π/4 → diagonal spins
+  const thetaMap = { horizontal: Math.PI/2, vertical: 0, diagonal1: Math.PI/4, diagonal2: -Math.PI/4 };
+  const theta = thetaMap[state.revolveAxis ?? 'horizontal'];
+
+  // Foreshortening direction in canvas space (perpendicular to spin axis):
+  const fdX =  Math.sin(theta);
+  const fdY = -Math.cos(theta);
+  // Perpendicular (parallel to spin axis):
+  const fpX = -fdY;  // = cos(theta)
+  const fpY =  fdX;  // = sin(theta)
+
+  // Face centers displaced along the foreshortening direction by sinA * thick/2
+  const faceOffMag = thick * sinA * 0.5;
+  const faceAX = cx + faceOffMag * fdX;   // "front" face center
+  const faceAY = cy + faceOffMag * fdY;
+  const faceBX = cx - faceOffMag * fdX;   // "back"  face center
+  const faceBY = cy - faceOffMag * fdY;
+
+  const frontVisible = cosA >= 0;
+
+  // Background
+  if (state.revolveBgColor === 'transparent') {
+    target.clearRect(0, 0, w, h);
+  } else {
+    target.fillStyle = state.revolveBgColor;
+    target.fillRect(0, 0, w, h);
+  }
+
+  const bodyS  = (R * 1.28) / 24;
+  const charSW = strokeW / bodyS;
+
+  // alpha = angle to rotate before/after scale so foreshortening runs along the spin axis's
+  // perpendicular direction — keeping the character upright for every axis choice.
+  const alpha = theta - Math.PI / 2;
+
+  // Gradient extent in character-local space, sweeping along the foreshortening direction.
+  const gMag  = 13.5 * cosA;
+  const gPerp = 8.6;
+  // Start / end of the face lighting gradient:
+  const fg0x = 12 - gMag * fdX + gPerp * fpX;
+  const fg0y = 12 - gMag * fdY + gPerp * fpY;
+  const fg1x = 12 + gMag * fdX - gPerp * fpX;
+  const fg1y = 12 + gMag * fdY - gPerp * fpY;
+  // Back-face gradient (uses absC instead of cosA so it's always lit):
+  const bg0x = 12 - 10.8 * absC * fdX + gPerp * fpX;
+  const bg0y = 12 - 10.8 * absC * fdY + gPerp * fpY;
+  const bg1x = 12 + 10.8 * absC * fdX - gPerp * fpX;
+  const bg1y = 12 + 10.8 * absC * fdY - gPerp * fpY;
+  // Rim gradient (upper-right → lower-left in local space, fixed):
+  const rim0x = 12 + 12 * fpX;   const rim0y = 12 - 12 * fpY;
+  const rim1x = 12 - 12 * fpX;   const rim1y = 12 + 12 * fpY;
+
+  // withFaceAt: translate to face canvas position, apply directional foreshortening via
+  // rotate-scale-rotate so the character shape stays upright for any spin axis.
+  const withFaceAt = (fX, fY, fn) => {
+    target.save();
+    target.translate(fX, fY);
+    target.rotate(-alpha);
+    target.scale(absC || 0.001, 1);
+    target.rotate(alpha);
+    target.translate(0, -R * 0.04);
+    target.scale(bodyS, bodyS);
+    target.translate(-12, -12);
+    fn();
+    target.restore();
+  };
+
+  const sp = new Path2D(SHAPES[state.shape]);
+
+  const drawFaceB = (fX, fY) => withFaceAt(fX, fY, () => {
+    const bg = target.createLinearGradient(bg0x, bg0y, bg1x, bg1y);
+    bg.addColorStop(0,   tonalShift(base, -50));
+    bg.addColorStop(0.5, tonalShift(base, -32));
+    bg.addColorStop(1,   tonalShift(base, -18));
+    target.fillStyle = bg;
+    target.fill(sp);
+    target.strokeStyle = '#000';
+    target.lineWidth   = charSW;
+    target.stroke(sp);
+  });
+
+  const drawFaceA = (fX, fY) => withFaceAt(fX, fY, () => {
+    target.fillStyle = '#fff';
+    target.fill(sp);
+    target.save();
+    target.clip(sp);
+    const fg = target.createLinearGradient(fg0x, fg0y, fg1x, fg1y);
+    fg.addColorStop(0,   '#000');
+    fg.addColorStop(0.5, '#808080');
+    fg.addColorStop(1,   '#fff');
+    target.globalCompositeOperation = 'soft-light';
+    target.globalAlpha = 0.45;
+    target.fillStyle = fg;
+    target.fillRect(0, 0, 24, 24);
+    target.globalCompositeOperation = 'source-over';
+    target.globalAlpha = 1;
+    target.restore();
+    target.strokeStyle = '#000';
+    target.lineWidth   = charSW;
+    target.stroke(sp);
+    const [ex, ey] = SHAPE_EYE_OFFSETS[state.shape] ?? [7, 9.5];
+    target.translate(ex, ey);
+    target.fillStyle = '#000';
+    for (const p of EYES[state.eyes]) target.fill(new Path2D(p));
+  });
+
+  const rimLight = tonalShift(base, -18);
+  const rimMid   = tonalShift(base, -32);
+  const rimDark  = tonalShift(base, -50);
+  const extSteps = 20;
+  const outlineW = charSW * 2;
+
+  const strokeLayer = (fX, fY) => withFaceAt(fX, fY, () => {
+    target.strokeStyle = '#000';
+    target.lineWidth   = outlineW;
+    target.stroke(sp);
+  });
+
+  const fillLayer = (fX, fY) => withFaceAt(fX, fY, () => {
+    const g = target.createLinearGradient(rim0x, rim0y, rim1x, rim1y);
+    g.addColorStop(0,   rimLight);
+    g.addColorStop(0.5, rimMid);
+    g.addColorStop(1,   rimDark);
+    target.fillStyle = g;
+    target.fill(sp);
+  });
+
+  const lerp = (t) => [
+    faceBX + (faceAX - faceBX) * t,
+    faceBY + (faceAY - faceBY) * t
+  ];
+
+  if (frontVisible) {
+    for (let i = 0; i <= extSteps; i++) { const [lx,ly] = lerp(i/extSteps); strokeLayer(lx,ly); }
+    for (let i = 0; i <= extSteps; i++) { const [lx,ly] = lerp(i/extSteps); fillLayer(lx,ly);   }
+    drawFaceA(faceAX, faceAY);
+  } else {
+    for (let i = extSteps; i >= 0; i--) { const [lx,ly] = lerp(i/extSteps); strokeLayer(lx,ly); }
+    for (let i = extSteps; i >= 0; i--) { const [lx,ly] = lerp(i/extSteps); fillLayer(lx,ly);   }
+    drawFaceB(faceBX, faceBY);
+  }
+}
+
+function loopRevolve(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = (ts - startTime) / 1000;
+  const [w, h]  = SIZES[state.ratio];
+  drawRevolveFrame(ctx, w, h, elapsed);
+  animId = requestAnimationFrame(loopRevolve);
+}
+
+// ─── GIF EXPORT ──────────────────────────────────────────────────────────────
+
+// ─── GIF EXPORT ──────────────────────────────────────────────────────────────
+
+async function ensureWorker() {
+  if (gifWorkerURL) return;
+  const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+  const t = await r.text();
+  gifWorkerURL = URL.createObjectURL(new Blob([t], { type: 'application/javascript' }));
+}
+
+async function exportGIF() {
+  const btn = document.getElementById('export-btn');
+  const progressEl = document.getElementById('export-progress');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressFill = document.getElementById('progress-fill');
+
+  btn.disabled = true;
+  btn.textContent = 'Preparing…';
+  progressEl.textContent = 'Loading encoder…';
+  progressWrap.style.display = 'block';
+  progressFill.style.width = '0%';
+
+  try {
+    await ensureWorker();
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Export GIF';
+    progressEl.textContent = 'Failed to load encoder. Check internet connection.';
+    return;
+  }
+
+  const [w, h] = SIZES[state.ratio];
+
+  const off    = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const offCtx = off.getContext('2d');
+
+  progressEl.textContent = 'Capturing frames…';
+
+  const TRANSP_KEY = 0xFF00FF; // magenta — doesn't appear in any avatar/theme color
+  const bgIsTransparent = (state.animType === 'ambient'  && state.ambientBgColor  === 'transparent') ||
+                          (state.animType === 'balldrop' && state.bdBgColor       === 'transparent') ||
+                          (state.animType === 'revolve'  && state.revolveBgColor  === 'transparent');
+
+  let totalFrames, frameDelay, getFrame;
+
+  if (state.animType === 'balldrop') {
+    const fps          = 25;
+    const spawnInt     = Math.max(0.25, 3.5 / state.avatarCount);
+    const duration     = Math.min(state.avatarCount * spawnInt + 2.5, 9);
+    totalFrames        = Math.min(Math.round(duration * fps), 150);
+    frameDelay         = Math.round(1000 / fps);
+    const r            = w * BALL_SIZES[state.avatarSize];
+    const simDt        = 1 / fps;
+    let   simBalls     = [];
+    let   simSpawned   = 0;
+    const simConfigs   = buildBallConfigs(state.avatarCount, seededRng(42));
+
+    getFrame = (f) => {
+      const simTime = f * simDt;
+      while (simSpawned < state.avatarCount && simTime >= simSpawned * spawnInt) {
+        const rng = seededRng(simSpawned * 999 + 1);
+        simBalls.push(makeBall(w, r, rng, simConfigs[simSpawned]));
+        simSpawned++;
+      }
+      stepBalls(simBalls, simDt, w, h);
+      if (state.bdBgColor === 'transparent') { offCtx.clearRect(0, 0, w, h); } else { offCtx.fillStyle = state.bdBgColor; offCtx.fillRect(0, 0, w, h); }
+      for (const b of simBalls) drawAvatar(offCtx, b);
+    };
+  } else if (state.animType === 'ambient') {
+    const fps = 25;
+    const dur = 6;
+    totalFrames = Math.min(Math.round(dur * fps), 150);
+    frameDelay  = Math.round(1000 / fps);
+    const simDt = 1 / fps;
+    const rng   = seededRng(12345);
+    const es    = state.ambientEyeRange / 5;
+    const r     = Math.min(w, h) * 0.3;
+    // seed from current live state so GIF matches what the user sees
+    let simLookX = ambientLookX, simLookY = ambientLookY;
+    let simTargetX = ambientTargetX, simTargetY = ambientTargetY;
+    let simBlinking = ambientBlinking, simBlinkT = ambientBlinkT;
+    let simNextEvent = 0.3 + rng() * 0.5, simElapsed = 0;
+    getFrame = (_f) => {
+      simElapsed += simDt;
+      const lerpSpd = 2 + state.ambientEyeRange * 0.7;
+      simLookX += (simTargetX - simLookX) * lerpSpd * simDt;
+      simLookY += (simTargetY - simLookY) * lerpSpd * simDt;
+      let blinkScale = 1;
+      if (simBlinking) {
+        simBlinkT += simDt * 9;
+        if (simBlinkT >= 1) { simBlinkT = 0; simBlinking = false; }
+        blinkScale = Math.abs(1 - 2 * simBlinkT);
+      }
+      if (simElapsed > simNextEvent) {
+        const roll = rng();
+        if (roll < 0.25) {
+          simBlinking = true; simBlinkT = 0;
+          simNextEvent = simElapsed + (0.5 + rng() * 2) / es;
+        } else if (roll < 0.65) {
+          simTargetX = (rng() - 0.5) * 3 * es;
+          simTargetY = (rng() - 0.5) * 1.5 * es;
+          simNextEvent = simElapsed + (0.6 + rng() * 1.5) / es;
+        } else {
+          simTargetX = 0; simTargetY = 0;
+          simNextEvent = simElapsed + (1 + rng() * 1.5) / es;
+        }
+      }
+      if (state.ambientBgColor === 'transparent') { offCtx.clearRect(0, 0, w, h); } else { offCtx.fillStyle = state.ambientBgColor; offCtx.fillRect(0, 0, w, h); }
+      drawAmbientAvatar(offCtx, w / 2, h / 2, r, state.shape, state.eyes, state.ambientColor, simLookX, simLookY, blinkScale);
+    };
+  } else if (state.animType === 'revolve') {
+    const fps    = 25;
+    const rps    = state.speed * 0.1;
+    const dur    = 1 / rps;                                   // exactly one full rotation
+    totalFrames  = Math.min(Math.round(dur * fps), 120);
+    frameDelay   = Math.round(1000 / fps);
+    getFrame = (f) => {
+      const elapsed = f / fps;
+      drawRevolveFrame(offCtx, w, h, elapsed);
+    };
+  } else {
+    const speedRings  = state.speed * 0.15;
+    const loopSecs    = 2 / speedRings;
+    totalFrames       = Math.min(80, Math.max(20, Math.round(loopSecs * 25)));
+    frameDelay        = Math.round((loopSecs / totalFrames) * 1000);
+
+    getFrame = (f) => {
+      const totalPhase = (f / totalFrames) * 2;
+      drawFrame(offCtx, w, h, totalPhase);
+    };
+  }
+
+  const gif = new GIF({ workers: 2, quality: 6, width: w, height: h, workerScript: gifWorkerURL, ...(bgIsTransparent ? { transparent: TRANSP_KEY } : {}) });
+
+  for (let f = 0; f < totalFrames; f++) {
+    getFrame(f);
+    if (bgIsTransparent) {
+      const id = offCtx.getImageData(0, 0, w, h);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 200) { d[i] = 255; d[i+1] = 0; d[i+2] = 255; d[i+3] = 255; }
+        else { d[i+3] = 255; }
+      }
+      offCtx.putImageData(id, 0, 0);
+    }
+    const delay = (state.animType === 'balldrop' && f === totalFrames - 1) ? 1000 : frameDelay;
+    gif.addFrame(off, { copy: true, delay });
+    progressFill.style.width = ((f / totalFrames) * 60) + '%';
+    progressEl.textContent = `Capturing frames… ${f + 1}/${totalFrames}`;
+    if (f % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  progressEl.textContent = 'Encoding GIF…';
+  progressFill.style.width = '70%';
+
+  gif.on('progress', p => {
+    progressFill.style.width = (70 + p * 30) + '%';
+    progressEl.textContent = `Encoding… ${Math.round(p * 100)}%`;
+  });
+
+  gif.on('finished', blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ratio = state.ratio.replace(':','x');
+    const typeSuffix = state.animType === 'concentric'
+      ? `concentric_${THEMES[state.theme].name.toLowerCase()}`
+      : state.animType === 'balldrop'
+      ? `balldrop_${state.avatarCount}avatars`
+      : state.animType === 'revolve'
+      ? `revolve_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`
+      : `ambient_${SHAPE_NAMES[state.shape].split('—')[0].trim().toLowerCase().replace(' ','_')}`;
+    a.download = `teammate_${ratio}_${typeSuffix}.gif`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    btn.disabled = false;
+    btn.textContent = 'Export GIF';
+    progressEl.textContent = 'Done!';
+    progressFill.style.width = '100%';
+    setTimeout(() => {
+      progressEl.textContent = '';
+      progressWrap.style.display = 'none';
+    }, 3000);
+  });
+
+  gif.render();
+}
+
+// ─── UI SETUP ────────────────────────────────────────────────────────────────
+
+function populateSelects() {
+  const shapeGrid = document.getElementById('shape-grid');
+  for (let i = 1; i <= 16; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'visual-tile' + (i === state.shape ? ' active' : '');
+    btn.title = SHAPE_NAMES[i];
+    const cvs = document.createElement('canvas');
+    btn.appendChild(cvs);
+    shapeGrid.appendChild(btn);
+    drawShapeTile(cvs, i);
+    btn.addEventListener('click', () => {
+      state.shape = i;
+      shapeGrid.querySelectorAll('.visual-tile').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+
+  const eyesGrid = document.getElementById('eyes-grid');
+  for (let i = 1; i <= 12; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'visual-tile' + (i === state.eyes ? ' active' : '');
+    btn.title = EYE_NAMES[i];
+    const cvs = document.createElement('canvas');
+    btn.appendChild(cvs);
+    eyesGrid.appendChild(btn);
+    drawEyeTile(cvs, i);
+    btn.addEventListener('click', () => {
+      state.eyes = i;
+      eyesGrid.querySelectorAll('.visual-tile').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+
+  const themeEl = document.getElementById('theme-select');
+  THEMES.forEach((t, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = t.name;
+    if (i === state.theme) o.selected = true;
+    themeEl.appendChild(o);
+  });
+}
+
+function bindEvents() {
+  document.getElementById('theme-select').addEventListener('change', e => {
+    state.theme = +e.target.value;
+  });
+
+  document.getElementById('type-select').addEventListener('change', e => {
+    state.animType = e.target.value;
+    updateControlVisibility();
+    startAnim();
+  });
+
+  document.getElementById('gravity-range').addEventListener('input', e => {
+    state.bdGravity = +e.target.value;
+    document.getElementById('gravity-val').textContent = e.target.value;
+  });
+
+  document.getElementById('count-range').addEventListener('input', e => {
+    state.avatarCount = +e.target.value;
+    document.getElementById('count-val').textContent = e.target.value;
+  });
+  document.getElementById('count-range').addEventListener('change', () => {
+    if (state.animType === 'balldrop') startAnim();
+  });
+
+  document.querySelectorAll('.size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.avatarSize = btn.dataset.size;
+      if (state.animType === 'balldrop') startAnim();
+    });
+  });
+
+  const BG_SWATCHES = ['#ffffff','#F2F2F2','#A3A3A3','#525252','#292929','#000000','transparent'];
+
+  const bdBgPalette = document.getElementById('bd-bg-palette');
+  BG_SWATCHES.forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === 'transparent' ? ' transparent-swatch' : '') + (color === state.bdBgColor ? ' active' : '');
+    if (color !== 'transparent') sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.bdBgColor = color;
+      bdBgPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    bdBgPalette.appendChild(sw);
+  });
+
+  const ambientPalette = document.getElementById('ambient-palette');
+  AVATAR_COLORS.forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === state.ambientColor ? ' active' : '');
+    sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.ambientColor = color;
+      ambientPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    ambientPalette.appendChild(sw);
+  });
+
+  const ambientBgPalette = document.getElementById('ambient-bg-palette');
+  BG_SWATCHES.forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === 'transparent' ? ' transparent-swatch' : '') + (color === state.ambientBgColor ? ' active' : '');
+    if (color !== 'transparent') sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.ambientBgColor = color;
+      ambientBgPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    ambientBgPalette.appendChild(sw);
+  });
+
+  document.getElementById('eye-range').addEventListener('input', e => {
+    state.ambientEyeRange = +e.target.value;
+    document.getElementById('eye-range-val').textContent = e.target.value;
+  });
+
+  // Revolve axis buttons
+  document.querySelectorAll('#revolve-axis-btns .axis-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#revolve-axis-btns .axis-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.revolveAxis = btn.dataset.axis;
+    });
+  });
+
+  // Revolve palettes
+  const revolveDiscPalette = document.getElementById('revolve-disc-palette');
+  AVATAR_COLORS.forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === state.revolveDiscColor ? ' active' : '');
+    sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.revolveDiscColor = color;
+      revolveDiscPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    revolveDiscPalette.appendChild(sw);
+  });
+
+  const revolveBgPalette = document.getElementById('revolve-bg-palette');
+  BG_SWATCHES.forEach(color => {
+    const sw = document.createElement('button');
+    sw.className = 'color-swatch' + (color === 'transparent' ? ' transparent-swatch' : '') + (color === state.revolveBgColor ? ' active' : '');
+    if (color !== 'transparent') sw.style.background = color;
+    sw.addEventListener('click', () => {
+      state.revolveBgColor = color;
+      revolveBgPalette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    revolveBgPalette.appendChild(sw);
+  });
+
+
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.animStyle = btn.dataset.style;
+      startAnim();
+    });
+  });
+
+  document.querySelectorAll('.ratio-btn[data-ratio]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ratio-btn[data-ratio]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.ratio = btn.dataset.ratio;
+      // Close custom panel when a preset is chosen
+      document.getElementById('custom-size-row').classList.remove('visible');
+      document.getElementById('custom-size-toggle').classList.remove('active');
+      applyCanvasSize();
+      if (state.animType === 'balldrop') startAnim();
+    });
+  });
+
+  // Custom size toggle
+  document.getElementById('custom-size-toggle').addEventListener('click', () => {
+    const row    = document.getElementById('custom-size-row');
+    const pencil = document.getElementById('custom-size-toggle');
+    const open   = row.classList.toggle('visible');
+    pencil.classList.toggle('active', open);
+    if (open) {
+      // Pre-fill with current canvas dimensions
+      const [cw, ch] = SIZES[state.ratio] || [canvas.width, canvas.height];
+      document.getElementById('custom-w').value = cw;
+      document.getElementById('custom-h').value = ch;
+      document.getElementById('custom-w').focus();
+    }
+  });
+
+  function applyCustomSize() {
+    const w = Math.max(100, Math.min(4000, parseInt(document.getElementById('custom-w').value) || 800));
+    const h = Math.max(100, Math.min(4000, parseInt(document.getElementById('custom-h').value) || 600));
+    SIZES['custom'] = [w, h];
+    state.ratio = 'custom';
+    document.querySelectorAll('.ratio-btn[data-ratio]').forEach(b => b.classList.remove('active'));
+    applyCanvasSize();
+    if (state.animType === 'balldrop') startAnim();
+  }
+
+  document.getElementById('custom-size-apply').addEventListener('click', applyCustomSize);
+  document.getElementById('custom-w').addEventListener('keydown', e => { if (e.key === 'Enter') applyCustomSize(); });
+  document.getElementById('custom-h').addEventListener('keydown', e => { if (e.key === 'Enter') applyCustomSize(); });
+
+  const speedRange = document.getElementById('speed-range');
+  const speedVal   = document.getElementById('speed-val');
+  speedRange.addEventListener('input', e => {
+    state.speed = +e.target.value;
+    speedVal.textContent = e.target.value;
+  });
+
+  document.getElementById('spacing-range').addEventListener('input', e => {
+    state.concentricSpacing = +e.target.value;
+    document.getElementById('spacing-val').textContent = e.target.value;
+  });
+
+  document.getElementById('export-btn').addEventListener('click', exportGIF);
+
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+
+// Load gif.js (export) from CDN
+const gifScript = document.createElement('script');
+gifScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js';
+document.head.appendChild(gifScript);
+
+
+populateSelects();
+bindEvents();
+updateControlVisibility();
+applyCanvasSize();
+startAnim();
+</script>
+</body>
+</html>
