@@ -6,7 +6,7 @@
 <title>AI Teammate Motion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; background: #111; color: #fff; height: 100vh; display: flex; overflow: hidden; }
@@ -437,32 +437,60 @@
     gap: 18px;
   }
   #chomp-final-msg {
-    color: #4EC81E;
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Pixelify Sans', sans-serif;
+    color: #fff;
     text-align: center;
-    line-height: 1.2;
   }
-  #chomp-final-msg span {
-    display: block;
-    font-size: 14px;
-    font-weight: 500;
-    color: #aaa;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+  .chomp-stat-row {
+    display: flex;
+    gap: 36px;
     margin-bottom: 4px;
+  }
+  .chomp-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .chomp-stat-label {
+    font-size: 12px;
+    color: #888;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .chomp-stat-number {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .chomp-rating-val {
+    font-size: 48px;
+    font-weight: 700;
+    color: #4EC81E;
+    line-height: 1;
+    margin-top: 6px;
+  }
+  .chomp-rating-label {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
   #chomp-start-btn {
     background: #fff;
     color: #000;
     border: none;
     border-radius: 8px;
-    font-size: 16px;
+    font-family: 'Pixelify Sans', sans-serif;
+    font-size: 20px;
     font-weight: 700;
     padding: 11px 44px;
     cursor: pointer;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     transition: background 0.12s;
   }
   #chomp-start-btn:hover { background: #ddd; }
@@ -1636,7 +1664,26 @@ function showChompOverlay(done) {
   const btn     = document.getElementById('chomp-start-btn');
   if (!overlay) return;
   if (done) {
-    msg.style.display = 'none';
+    const totalSecs = Math.floor(chompFinalTime);
+    const mm = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+    const ss = String(totalSecs % 60).padStart(2, '0');
+    // Rating = dots eaten ÷ seconds — higher is better
+    const rating = chompFinalTime > 0 ? (chompScore / chompFinalTime).toFixed(1) : chompScore.toFixed(1);
+    msg.innerHTML = `
+      <div class="chomp-stat-row">
+        <div class="chomp-stat-item">
+          <span class="chomp-stat-label">Score</span>
+          <span class="chomp-stat-number">${chompScore}</span>
+        </div>
+        <div class="chomp-stat-item">
+          <span class="chomp-stat-label">Time</span>
+          <span class="chomp-stat-number">${mm}:${ss}</span>
+        </div>
+      </div>
+      <div class="chomp-rating-val">${rating}</div>
+      <div class="chomp-rating-label">dots per sec</div>
+    `;
+    msg.style.display = 'flex';
     btn.textContent = 'PLAY AGAIN';
   } else {
     msg.style.display = 'none';
@@ -1657,11 +1704,12 @@ function loopChomp(ts) {
   chompPrevT = globalElapsed;
 
   const [w, h] = SIZES[state.ratio];
-  const cellSize = Math.floor(Math.min(w, h) / MAZE_COLS);
+  const HUD_H  = 44; // reserved px at top for score + timer
+  const cellSize = Math.floor(Math.min(w, h - HUD_H) / MAZE_COLS);
   const mazeW = cellSize * MAZE_COLS;
   const mazeH = cellSize * MAZE_ROWS;
   const offsetX = Math.floor((w - mazeW) / 2);
-  const offsetY = Math.floor((h - mazeH) / 2);
+  const offsetY = HUD_H + Math.floor((h - HUD_H - mazeH) / 2);
   const charSize = cellSize * 0.7;
   const speed = 5.5; // cells per second
 
@@ -1712,7 +1760,7 @@ function loopChomp(ts) {
       if (!d.eaten) {
         const dx = offsetX + (d.col + 0.5) * cellSize - px;
         const dy = offsetY + (d.row + 0.5) * cellSize - py;
-        if (Math.abs(dx) < eatDist && Math.abs(dy) < eatDist) { d.eaten = true; }
+        if (Math.abs(dx) < eatDist && Math.abs(dy) < eatDist) { d.eaten = true; chompScore++; }
         else remaining++;
       }
     }
@@ -1733,8 +1781,27 @@ function loopChomp(ts) {
   }
   drawChompChar(ctx, px, py, charSize, CHOMP_ANGLES[chompDir]);
 
+  // HUD — score (top-left) and timer (top-right), drawn in the reserved strip
+  if (chompGameState === 'playing') {
+    const hudSize = Math.max(14, Math.round(cellSize * 0.78));
+    const hudY    = HUD_H / 2; // vertically centred in the reserved strip
+    const totalSecs = Math.floor(chompElapsed);
+    const mm = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+    const ss = String(totalSecs % 60).padStart(2, '0');
+    ctx.save();
+    ctx.font         = `700 ${hudSize}px 'Pixelify Sans', sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = '#ffffff';
+    ctx.textAlign    = 'left';
+    ctx.fillText('Score : ' + chompScore, offsetX, hudY);
+    ctx.textAlign    = 'right';
+    ctx.fillText('Time: ' + mm + ':' + ss, offsetX + mazeW, hudY);
+    ctx.restore();
+  }
+
   // Game over — stop loop, show overlay
   if (allEaten) {
+    chompFinalTime = chompElapsed;
     chompGameState = 'done';
     animId = null;
     showChompOverlay(true);
