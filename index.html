@@ -422,6 +422,50 @@
   }
   .upload-label:hover { border-color: #555; color: #fff; }
   .upload-hint { font-size: 12px; color: #666; margin-top: 4px; display: block; }
+
+  /* Chomp game overlay */
+  #chomp-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    flex-direction: column;
+    gap: 18px;
+  }
+  #chomp-final-msg {
+    color: #4EC81E;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-align: center;
+    line-height: 1.2;
+  }
+  #chomp-final-msg span {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #aaa;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #chomp-start-btn {
+    background: #fff;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 11px 44px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: background 0.12s;
+  }
+  #chomp-start-btn:hover { background: #ddd; }
 </style>
 </head>
 <body>
@@ -435,6 +479,7 @@
         <option value="ambient">Ambient</option>
         <option value="revolve">3D Revolve</option>
         <option value="wheatpaste">Wheat Paste</option>
+        <option value="chomp">Chomp</option>
       </select>
     </div>
     <div class="style-toggle concentric-only" id="style-toggle-bar">
@@ -444,6 +489,10 @@
   </div>
   <div id="preview-wrap">
     <canvas id="preview"></canvas>
+    <div id="chomp-overlay">
+      <div id="chomp-final-msg" style="display:none"><span>Your time</span>0.00s</div>
+      <button id="chomp-start-btn">START</button>
+    </div>
   </div>
 </div>
 
@@ -613,9 +662,10 @@
     <button id="wp-regen-btn" style="width:100%;padding:10px;background:#252525;border:1.5px solid #444;border-radius:10px;color:#ccc;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;transition:all 0.15s;letter-spacing:0.01em;">↻  Regenerate</button>
   </div>
 
+
   <hr class="divider">
 
-  <div style="display:flex;flex-direction:column;gap:8px;">
+  <div id="export-wrap" style="display:flex;flex-direction:column;gap:8px;">
     <div style="display:flex;gap:8px;">
       <button id="export-btn" style="flex:1;">Export GIF</button>
       <button id="export-mov-btn" style="flex:1;">Export MOV</button>
@@ -704,7 +754,7 @@ const state = {
   revolveDiscColor: '#79ABFF',
   revolveBgColor: '#111111',
   revolveAxis: 'horizontal',
-  wpBgColor: '#F7BD51',
+  wpBgColor: '#ffffff',
   wpSize: 'medium',
   wpCount: 8,
   wpSeed: Math.floor(Math.random() * 1e9),
@@ -867,14 +917,26 @@ function startAnim() {
   wpStamps = []; wpStampIdx = 0; wpPrevT = 0;
   if (state.animType === 'wheatpaste') {
     const [ww, wh] = SIZES[state.ratio];
-    ctx.clearRect(0, 0, ww, wh); // clear immediately so old frames don't show
+    ctx.clearRect(0, 0, ww, wh);
     const stampSize = Math.min(ww, wh) * WP_SIZES[state.wpSize];
     wpConfigs = buildWpConfigs(state.wpSeed, ww, wh, stampSize, state.wpCount);
+  }
+  if (state.animType === 'chomp') {
+    const [ww, wh] = SIZES[state.ratio];
+    ctx.clearRect(0, 0, ww, wh);
+    chompCol = 10; chompTargetCol = 10;
+    chompRow = 19; chompTargetRow = 19;
+    chompProgress = 1; chompDir = 3; chompNextDir = -1;
+    chompScore = 0; chompPrevT = 0;
+    chompGameState = 'idle'; chompElapsed = 0; chompFinalTime = 0;
+    initChompDots();
+    showChompOverlay(false);
   }
   const fn = state.animType === 'balldrop'   ? loopBallDrop
            : state.animType === 'ambient'    ? loopAmbient
            : state.animType === 'revolve'    ? loopRevolve
            : state.animType === 'wheatpaste' ? loopWheatPaste
+           : state.animType === 'chomp'      ? loopChomp
            : loop;
   animId = requestAnimationFrame(fn);
 }
@@ -886,16 +948,25 @@ function updateControlVisibility() {
   document.querySelectorAll('.ambient-only').forEach(el =>     el.style.display = t === 'ambient'     ? '' : 'none');
   document.querySelectorAll('.revolve-only').forEach(el =>     el.style.display = t === 'revolve'     ? '' : 'none');
   document.querySelectorAll('.wheatpaste-only').forEach(el =>  el.style.display = t === 'wheatpaste'  ? '' : 'none');
+  document.querySelectorAll('.chomp-only').forEach(el =>       el.style.display = t === 'chomp'       ? '' : 'none');
   document.querySelectorAll('.not-balldrop').forEach(el =>     el.style.display = t !== 'balldrop'    ? '' : 'none');
-  // Body shape + Eyes hidden for balldrop and wheatpaste (WP uses random shapes/eyes per stamp)
+  // Body shape + Eyes: hidden for balldrop and wheatpaste; visible for chomp (player's character)
   const bodyShapeGroup = document.getElementById('body-shape-group');
   const eyesGroup      = document.getElementById('eyes-group');
-  const wpHide = t === 'balldrop' || t === 'wheatpaste';
-  if (bodyShapeGroup) bodyShapeGroup.style.display = wpHide ? 'none' : '';
-  if (eyesGroup)      eyesGroup.style.display      = wpHide ? 'none' : '';
+  const hideShapeEyes  = t === 'balldrop' || t === 'wheatpaste';
+  if (bodyShapeGroup) bodyShapeGroup.style.display = hideShapeEyes ? 'none' : '';
+  if (eyesGroup)      eyesGroup.style.display      = hideShapeEyes ? 'none' : '';
   document.querySelectorAll('.anim-speed').forEach(el =>
     el.style.display = (t === 'concentric' || t === 'revolve' || t === 'wheatpaste') ? '' : 'none'
   );
+  // Hide export buttons for Chomp (it's an interactive game, not an exportable animation)
+  const exportWrap = document.getElementById('export-wrap');
+  if (exportWrap) exportWrap.style.display = t === 'chomp' ? 'none' : '';
+  // Hide chomp overlay when not in chomp mode
+  if (t !== 'chomp') {
+    const overlay = document.getElementById('chomp-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
 }
 
 // ─── BALL DROP ───────────────────────────────────────────────────────────────
@@ -1318,6 +1389,13 @@ function buildWpConfigs(seed, w, h, stampSize, count) {
   const margin = stampSize * 0.1;        // allow slight bleed off edges
   const placed = [];
 
+  // Build shuffled decks for colors, shapes, and eyes — every value used before any repeats
+  const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  const makeDeck = (pool) => { const d = []; while (d.length < count) d.push(...shuffle([...pool])); return d; };
+  const colorDeck = makeDeck(AVATAR_COLORS);
+  const shapeDeck = makeDeck([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]);
+  const eyesDeck  = makeDeck([1,2,3,4,5,6,7,8,9,10,11,12]);
+
   for (let i = 0; i < count; i++) {
     // Generate CANDS candidate positions (fixed # of RNG calls → deterministic)
     const candidates = [];
@@ -1337,13 +1415,14 @@ function buildWpConfigs(seed, w, h, stampSize, count) {
     placed.push(chosen);
 
     const cfg = {
-      x:          chosen.x,
-      y:          chosen.y,
-      size:       stampSize,
-      shape:      Math.ceil(rng() * 16),
-      eyes:       Math.ceil(rng() * 12),
-      rotation:   (rng() - 0.5) * Math.PI / 5.5,
-      peelCorner: Math.floor(rng() * 4),  // 0=TL, 1=TR, 2=BR, 3=BL
+      x:            chosen.x,
+      y:            chosen.y,
+      size:         stampSize,
+      shape:        shapeDeck[i],
+      eyes:         eyesDeck[i],
+      rotation:     (rng() - 0.5) * Math.PI / 3.2,
+      peelCorner:   Math.floor(rng() * 4),
+      stickerColor: colorDeck[i],
     };
     placed[placed.length - 1] = cfg; // update with full config for distance checks
   }
@@ -1351,29 +1430,53 @@ function buildWpConfigs(seed, w, h, stampSize, count) {
 }
 
 // Draws a single stamp: slams from 1.4→1.0 with a hard cubic ease over WP_STAMP_DUR.
+// Each stamp has a die-cut sticker border: a thick colored outline that bleeds around the shape.
 function drawWpStampFrame(target, stamp) {
   const t        = Math.min(stamp.stampT / WP_STAMP_DUR, 1);
   const progress = 1 - Math.pow(1 - t, 3); // ease-out cubic — fast decel
   const sc       = 1.4 - 0.4 * progress;   // 1.4 → 1.0
 
   target.save();
-  target.globalAlpha = Math.min(t / 0.18, 1); // snap opaque in first ~18% of duration
+  target.globalAlpha = Math.min(t / 0.18, 1);
   target.translate(stamp.x, stamp.y);
   target.scale(sc, sc);
   target.rotate(stamp.rotation);
   const s = stamp.size / 24;
   target.scale(s, s);
   target.translate(-12, -12);
+
   const shapeP = new Path2D(SHAPES[stamp.shape]);
-  target.fillStyle = '#ffffff';
+
+  // ── Die-cut sticker border ────────────────────────────────────────────────
+  // Thick colored stroke bleeds outward from the shape edge; fill covers center.
+  // Shadow is applied here only, then cleared for subsequent layers.
+  target.save();
+  target.shadowColor   = 'rgba(0,0,0,0.22)';
+  target.shadowBlur    = 14;        // px — not affected by CTM scale
+  target.shadowOffsetX = 0;
+  target.shadowOffsetY = 5 / s;    // ≈5 screen-px downward drop
+  target.strokeStyle   = stamp.stickerColor;
+  target.lineWidth     = 10;        // 5 shape-units of bleed outside the path
+  target.lineJoin      = 'round';
+  target.lineCap       = 'round';
+  target.stroke(shapeP);
+  target.fillStyle     = stamp.stickerColor;
+  target.fill(shapeP);
+  target.restore();                 // removes shadow for layers above
+
+  // ── Character body ────────────────────────────────────────────────────────
+  target.fillStyle   = '#ffffff';
   target.fill(shapeP);
   target.strokeStyle = '#000';
-  target.lineWidth = 1.5 * (state.strokeWeight / 5);
+  target.lineWidth   = 1.5 * (state.strokeWeight / 5);
   target.stroke(shapeP);
+
+  // ── Eyes ──────────────────────────────────────────────────────────────────
   const [ex, ey] = SHAPE_EYE_OFFSETS[stamp.shape] ?? [7, 9.5];
   target.translate(ex, ey);
   target.fillStyle = '#000';
   for (const p of EYES[stamp.eyes]) target.fill(new Path2D(p));
+
   target.restore();
 }
 
@@ -1402,7 +1505,244 @@ function loopWheatPaste(ts) {
   animId = requestAnimationFrame(loopWheatPaste);
 }
 
-// ─── GIF EXPORT ──────────────────────────────────────────────────────────────
+// ─── CHOMP ────────────────────────────────────────────────────────────────────
+
+const CHOMP_DOT_PATH = new Path2D('M4.99969 -0.0196838C2.24282 -0.0196838 -0.000305176 2.22344 -0.000305176 4.98032C-0.000305176 7.73719 2.24282 9.98032 4.99969 9.98032C7.75657 9.98032 9.99969 7.73719 9.99969 4.98032C9.99969 2.22344 7.75657 -0.0196838 4.99969 -0.0196838ZM7.28907 4.13094L4.36563 7.05344C4.32216 7.09709 4.27049 7.13171 4.21358 7.1553C4.15668 7.1789 4.09567 7.19101 4.03407 7.19094C3.91407 7.19094 3.79407 7.145 3.70282 7.05344L2.49813 5.84907C2.45262 5.806 2.41621 5.75425 2.39105 5.69687C2.36588 5.63949 2.35247 5.57765 2.35162 5.515C2.35076 5.45236 2.36247 5.39017 2.38606 5.33213C2.40965 5.27408 2.44463 5.22136 2.48895 5.17706C2.53326 5.13277 2.586 5.09781 2.64406 5.07425C2.70211 5.05069 2.7643 5.03901 2.82695 5.03989C2.8896 5.04078 2.95144 5.05422 3.0088 5.07941C3.06617 5.1046 3.1179 5.14104 3.16094 5.18657L4.03376 6.05907L6.62594 3.46844C6.66916 3.42365 6.72087 3.38792 6.77805 3.36332C6.83523 3.33873 6.89673 3.32577 6.95897 3.3252C7.02121 3.32463 7.08294 3.33646 7.14056 3.36C7.19818 3.38355 7.25053 3.41833 7.29456 3.46232C7.3386 3.50631 7.37343 3.55863 7.39702 3.61623C7.42062 3.67382 7.43251 3.73554 7.432 3.79778C7.43149 3.86002 7.41858 3.92154 7.39404 3.97874C7.36951 4.03594 7.33382 4.08768 7.28907 4.13094Z');
+
+const CHOMP_MAZE = [
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // r0  top border
+  [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1], // r1
+  [1,0,1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1,0,1], // r2
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], // r3
+  [1,0,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1,1,0,1], // r4
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1], // r5
+  [1,1,1,1,0,1,1,1,0,0,1,0,0,1,1,1,0,1,1,1,1], // r6
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // r7  TUNNEL
+  [1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1], // r8
+  [1,1,1,1,0,1,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1], // r9
+  [1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1], // r10
+  [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1], // r11
+  [1,0,1,1,0,1,1,1,0,0,1,0,0,1,1,1,0,1,1,0,1], // r12
+  [1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1], // r13
+  [1,1,0,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1,0,1,1], // r14
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1], // r15
+  [1,0,1,1,1,1,1,1,0,0,1,0,0,1,1,1,1,1,1,0,1], // r16
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], // r17
+  [1,0,1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1,0,1], // r18
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], // r19
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // r20 bottom border
+];
+const MAZE_ROWS = 21, MAZE_COLS = 21;
+
+const CHOMP_DIRS   = [[1,0],[0,1],[-1,0],[0,-1]]; // right,down,left,up
+const CHOMP_ANGLES = [0, Math.PI/2, Math.PI, -Math.PI/2];
+
+let chompCol = 10, chompRow = 19;
+let chompTargetCol = 10, chompTargetRow = 19;
+let chompProgress = 1.0;
+let chompDir = 3;       // 0=right,1=down,2=left,3=up
+let chompNextDir = -1;  // queued direction
+let chompScore = 0;
+let chompDots = [];
+let chompKeys = new Set();
+let chompPrevT = 0;
+let chompGameState = 'idle'; // 'idle' | 'playing' | 'done'
+let chompGameStartT = 0;     // rAF timestamp (ms) when game started
+let chompElapsed = 0;        // seconds since game start
+let chompFinalTime = 0;      // time when all dots eaten
+
+function isMazePath(col, row) {
+  if (row < 0 || row >= MAZE_ROWS) return false;
+  const c = ((col % MAZE_COLS) + MAZE_COLS) % MAZE_COLS;
+  return CHOMP_MAZE[row][c] === 0;
+}
+
+function initChompDots() {
+  chompDots = [];
+  for (let r = 0; r < MAZE_ROWS; r++) {
+    for (let c = 0; c < MAZE_COLS; c++) {
+      if (CHOMP_MAZE[r][c] === 0 && !(r === chompRow && c === chompCol)) {
+        chompDots.push({ col: c, row: r, eaten: false });
+      }
+    }
+  }
+}
+
+function drawChompDot(ctx, x, y, sc) {
+  ctx.save();
+  ctx.translate(x - 5 * sc, y - 5 * sc);
+  ctx.scale(sc, sc);
+  ctx.fillStyle = '#4EC81E';
+  ctx.fill(CHOMP_DOT_PATH);
+  ctx.restore();
+}
+
+function chompTileAt(r, c) {
+  if (r < 0 || r >= MAZE_ROWS) return 1;
+  const cc = ((c % MAZE_COLS) + MAZE_COLS) % MAZE_COLS;
+  return CHOMP_MAZE[r][cc];
+}
+
+function drawChompMaze(ctx, cellSize, offsetX, offsetY) {
+  // Black background for whole maze area
+  ctx.fillStyle = '#000';
+  ctx.fillRect(offsetX, offsetY, cellSize * MAZE_COLS, cellSize * MAZE_ROWS);
+
+  // Draw blue wall outlines as lines on path↔wall boundaries
+  const lw = Math.max(2, Math.round(cellSize * 0.18));
+  ctx.save();
+  ctx.strokeStyle = '#1a1aff';
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'square';
+  ctx.beginPath();
+  for (let r = 0; r < MAZE_ROWS; r++) {
+    for (let c = 0; c < MAZE_COLS; c++) {
+      if (chompTileAt(r, c) !== 0) continue; // only trace from path cells
+      const x = offsetX + c * cellSize;
+      const y = offsetY + r * cellSize;
+      if (chompTileAt(r - 1, c) === 1) { ctx.moveTo(x, y);            ctx.lineTo(x + cellSize, y); }
+      if (chompTileAt(r + 1, c) === 1) { ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize); }
+      if (chompTileAt(r, c - 1) === 1) { ctx.moveTo(x, y);            ctx.lineTo(x, y + cellSize); }
+      if (chompTileAt(r, c + 1) === 1) { ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize); }
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawChompChar(ctx, x, y, size, angle) {
+  const s = size / 12;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(s, s);
+  ctx.translate(-12, -12);
+  const shapeP = new Path2D(SHAPES[state.shape]);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill(shapeP);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5 * (state.strokeWeight / 5);
+  ctx.stroke(shapeP);
+  const [ex, ey] = SHAPE_EYE_OFFSETS[state.shape] ?? [7, 9.5];
+  ctx.translate(ex, ey);
+  ctx.fillStyle = '#000';
+  for (const p of EYES[state.eyes]) ctx.fill(new Path2D(p));
+  ctx.restore();
+}
+
+function showChompOverlay(done) {
+  const overlay = document.getElementById('chomp-overlay');
+  const msg     = document.getElementById('chomp-final-msg');
+  const btn     = document.getElementById('chomp-start-btn');
+  if (!overlay) return;
+  if (done) {
+    msg.style.display = 'none';
+    btn.textContent = 'PLAY AGAIN';
+  } else {
+    msg.style.display = 'none';
+    btn.textContent = 'START';
+  }
+  overlay.style.display = 'flex';
+}
+
+function hideChompOverlay() {
+  const overlay = document.getElementById('chomp-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function loopChomp(ts) {
+  if (!startTime) { startTime = ts; chompPrevT = 0; }
+  const globalElapsed = (ts - startTime) / 1000;
+  const dt = Math.min(globalElapsed - chompPrevT, 0.05);
+  chompPrevT = globalElapsed;
+
+  const [w, h] = SIZES[state.ratio];
+  const cellSize = Math.floor(Math.min(w, h) / MAZE_COLS);
+  const mazeW = cellSize * MAZE_COLS;
+  const mazeH = cellSize * MAZE_ROWS;
+  const offsetX = Math.floor((w - mazeW) / 2);
+  const offsetY = Math.floor((h - mazeH) / 2);
+  const charSize = cellSize * 0.7;
+  const speed = 5.5; // cells per second
+
+  // Update game timer
+  if (chompGameState === 'playing') {
+    chompElapsed = (ts - chompGameStartT) / 1000;
+  }
+
+  // Movement — only when playing
+  if (chompGameState === 'playing') {
+    let dirFromKey = -1;
+    if      (chompKeys.has('ArrowRight')) dirFromKey = 0;
+    else if (chompKeys.has('ArrowDown'))  dirFromKey = 1;
+    else if (chompKeys.has('ArrowLeft'))  dirFromKey = 2;
+    else if (chompKeys.has('ArrowUp'))    dirFromKey = 3;
+    if (dirFromKey >= 0) chompNextDir = dirFromKey;
+
+    chompProgress += dt * speed;
+    if (chompProgress >= 1) {
+      chompCol = chompTargetCol;
+      chompRow = chompTargetRow;
+      const dirs = chompNextDir >= 0 ? [chompNextDir, chompDir] : [chompDir];
+      let moved = false;
+      for (const d of dirs) {
+        const [dc, dr] = CHOMP_DIRS[d];
+        const nc = ((chompCol + dc) % MAZE_COLS + MAZE_COLS) % MAZE_COLS;
+        const nr = chompRow + dr;
+        if (isMazePath(nc, nr)) {
+          chompDir = d; chompNextDir = -1;
+          chompTargetCol = nc; chompTargetRow = nr;
+          chompProgress -= 1; moved = true; break;
+        }
+      }
+      if (!moved) chompProgress = 1;
+    }
+  }
+
+  const tLerp = Math.min(chompProgress, 1);
+  const px = offsetX + (chompCol + (chompTargetCol - chompCol) * tLerp + 0.5) * cellSize;
+  const py = offsetY + (chompRow + (chompTargetRow - chompRow) * tLerp + 0.5) * cellSize;
+
+  // Eat dots — only when playing
+  let allEaten = false;
+  if (chompGameState === 'playing') {
+    const eatDist = cellSize * 0.55;
+    let remaining = 0;
+    for (const d of chompDots) {
+      if (!d.eaten) {
+        const dx = offsetX + (d.col + 0.5) * cellSize - px;
+        const dy = offsetY + (d.row + 0.5) * cellSize - py;
+        if (Math.abs(dx) < eatDist && Math.abs(dy) < eatDist) { d.eaten = true; }
+        else remaining++;
+      }
+    }
+    if (remaining === 0) allEaten = true;
+  }
+
+  // Render
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  drawChompMaze(ctx, cellSize, offsetX, offsetY);
+
+  const dotSc = Math.max(0.7, cellSize / 22);
+  for (const d of chompDots) {
+    if (!d.eaten) {
+      drawChompDot(ctx, offsetX + (d.col + 0.5) * cellSize, offsetY + (d.row + 0.5) * cellSize, dotSc);
+    }
+  }
+  drawChompChar(ctx, px, py, charSize, CHOMP_ANGLES[chompDir]);
+
+  // Game over — stop loop, show overlay
+  if (allEaten) {
+    chompGameState = 'done';
+    animId = null;
+    showChompOverlay(true);
+    return; // don't re-request rAF
+  }
+
+  animId = requestAnimationFrame(loopChomp);
+}
 
 // ─── GIF EXPORT ──────────────────────────────────────────────────────────────
 
@@ -1862,7 +2202,7 @@ function bindEvents() {
 
   // Wheat Paste controls
   const wpBgPalette = document.getElementById('wp-bg-palette');
-  [...AVATAR_COLORS, ...BG_SWATCHES].forEach(color => {
+  BG_SWATCHES.forEach(color => {
     const sw = document.createElement('button');
     sw.className = 'color-swatch' + (color === 'transparent' ? ' transparent-swatch' : '') + (color === state.wpBgColor ? ' active' : '');
     if (color !== 'transparent') sw.style.background = color;
@@ -1895,6 +2235,33 @@ function bindEvents() {
     state.wpSeed = Math.floor(Math.random() * 1e9);
     if (state.animType === 'wheatpaste') startAnim();
   });
+
+  // Chomp overlay — START / PLAY AGAIN button
+  document.getElementById('chomp-start-btn').addEventListener('click', () => {
+    // Reset character and dots for a fresh run
+    chompCol = 10; chompTargetCol = 10;
+    chompRow = 19; chompTargetRow = 19;
+    chompProgress = 1; chompDir = 3; chompNextDir = -1;
+    chompScore = 0; chompElapsed = 0; chompFinalTime = 0;
+    initChompDots();
+    hideChompOverlay();
+    chompGameState = 'playing';
+    chompGameStartT = performance.now();
+    // Restart the loop if it was stopped (after a completed game)
+    if (!animId) {
+      startTime = null; chompPrevT = 0;
+      animId = requestAnimationFrame(loopChomp);
+    }
+  });
+
+  // Arrow key capture for Chomp (prevent page scroll while playing)
+  document.addEventListener('keydown', e => {
+    if (state.animType === 'chomp' && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+    }
+    chompKeys.add(e.key);
+  });
+  document.addEventListener('keyup', e => chompKeys.delete(e.key));
 
 }
 
