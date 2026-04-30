@@ -1672,7 +1672,7 @@ function showChompOverlay(done) {
     msg.innerHTML = `
       <div class="chomp-stat-row">
         <div class="chomp-stat-item">
-          <span class="chomp-stat-label">Score</span>
+          <span class="chomp-stat-label">Tasks Completed</span>
           <span class="chomp-stat-number">${chompScore}</span>
         </div>
         <div class="chomp-stat-item">
@@ -1793,7 +1793,7 @@ function loopChomp(ts) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle    = '#ffffff';
     ctx.textAlign    = 'left';
-    ctx.fillText('Score : ' + chompScore, offsetX, hudY);
+    ctx.fillText('Tasks : ' + chompScore, offsetX, hudY);
     ctx.textAlign    = 'right';
     ctx.fillText('Time: ' + mm + ':' + ss, offsetX + mazeW, hudY);
     ctx.restore();
