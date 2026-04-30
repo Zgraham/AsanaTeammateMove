@@ -6,7 +6,7 @@
 <title>AI Teammate Motion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bitcount+Single:wght@400;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; background: #111; color: #fff; height: 100vh; display: flex; overflow: hidden; }
@@ -441,7 +441,7 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    font-family: 'Pixelify Sans', sans-serif;
+    font-family: 'Bitcount Single', sans-serif;
     color: #fff;
     text-align: center;
   }
@@ -485,7 +485,7 @@
     color: #000;
     border: none;
     border-radius: 8px;
-    font-family: 'Pixelify Sans', sans-serif;
+    font-family: 'Bitcount Single', sans-serif;
     font-size: 20px;
     font-weight: 700;
     padding: 11px 44px;
@@ -1789,7 +1789,7 @@ function loopChomp(ts) {
     const mm = String(Math.floor(totalSecs / 60)).padStart(2, '0');
     const ss = String(totalSecs % 60).padStart(2, '0');
     ctx.save();
-    ctx.font         = `700 ${hudSize}px 'Pixelify Sans', sans-serif`;
+    ctx.font         = `700 ${hudSize}px 'Bitcount Single', sans-serif`;
     ctx.textBaseline = 'middle';
     ctx.fillStyle    = '#ffffff';
     ctx.textAlign    = 'left';
