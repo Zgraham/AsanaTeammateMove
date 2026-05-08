@@ -1475,21 +1475,13 @@ function drawWpStampFrame(target, stamp) {
   const shapeP = new Path2D(SHAPES[stamp.shape]);
 
   // ── Die-cut sticker border ────────────────────────────────────────────────
-  // Thick colored stroke bleeds outward from the shape edge; fill covers center.
-  // Shadow is applied here only, then cleared for subsequent layers.
-  target.save();
-  target.shadowColor   = 'rgba(0,0,0,0.22)';
-  target.shadowBlur    = 14;        // px — not affected by CTM scale
-  target.shadowOffsetX = 0;
-  target.shadowOffsetY = 5 / s;    // ≈5 screen-px downward drop
-  target.strokeStyle   = stamp.stickerColor;
-  target.lineWidth     = 10;        // 5 shape-units of bleed outside the path
-  target.lineJoin      = 'round';
-  target.lineCap       = 'round';
+  target.strokeStyle = stamp.stickerColor;
+  target.lineWidth   = 10;          // 5 shape-units of bleed outside the path
+  target.lineJoin    = 'round';
+  target.lineCap     = 'round';
   target.stroke(shapeP);
-  target.fillStyle     = stamp.stickerColor;
+  target.fillStyle   = stamp.stickerColor;
   target.fill(shapeP);
-  target.restore();                 // removes shadow for layers above
 
   // ── Character body ────────────────────────────────────────────────────────
   target.fillStyle   = '#ffffff';
